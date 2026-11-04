@@ -1,0 +1,61 @@
+sheet,ref,question,expected_category,expected_outcome,expected_sources,note
+1. InfoSec,1.1.1,"Do you hold a current ISO/IEC 27001 certification? If yes, state the scope of the certificate.",security,high,ISP-3,
+1. InfoSec,1.1.2,Do you undergo an independent SOC 2 Type II audit? Which Trust Services Criteria are in scope?,security,high,ISP-3,
+1. InfoSec,1.1.3,"Are you PCI DSS compliant? If so, state your merchant/service provider level.",security,gap,,trap: PCI not in pack
+1. InfoSec,1.1.4,"Who is accountable for information security within your organisation, and to whom do they report?",security,high,ISP-2,
+1. InfoSec,1.1.5,"Please provide a copy of your full, most recent penetration test report.",security,restricted,ISP-7,only exec summary under NDA
+1. InfoSec,1.2.1,"Is multi-factor authentication enforced for all workforce accounts, including those with production access?",security,high,ISP-5,
+1. InfoSec,1.2.2,Within what timeframe is a leaver's access revoked?,security,high,ISP-5,
+1. InfoSec,1.2.3,Does the platform support SAML 2.0 single sign-on and SCIM 2.0 user provisioning?,security,high,IAM-1;IAM-2,SCIM is Enterprise-only
+1. InfoSec,1.2.4,Can our administrators configure session timeouts? Please state the configurable range.,security,high,IAM-5,
+1. InfoSec,1.3.1,"Describe how customer data is encrypted in transit and at rest. Include algorithms, protocol versions and the key management service used.",security,high,ISP-6,multi-line cell
+1. InfoSec,1.3.2,Do you support customer-managed encryption keys (BYOK / HYOK)?,security,medium,ISP-6,"'no' is implied, never stated"
+1. InfoSec,1.4.1,What are your remediation SLAs for critical and high severity vulnerabilities?,security,high,ISP-7,"'SLA' here is internal targets, keyword rule may over-flag"
+1. InfoSec,1.4.2,Do you operate a public bug bounty or responsible disclosure programme?,security,gap,,trap
+1. InfoSec,1.4.3,How often is an independent penetration test performed?,security,high,ISP-7,
+1. InfoSec,1.5.1,In which country/region is customer data hosted? Can Globex require the data to be hosted in the United States?,security,partial,HA-1;HA-2,"first part covered, US hosting is a roadmap question"
+1. InfoSec,1.5.2,What are your RTO and RPO for a full loss of your primary hosting region?,security,high,BCP-1,
+1. InfoSec,1.5.3,Within what timeframe will you notify us of a confirmed personal data breach?,security|privacy,high,IR-4,
+1. InfoSec,1.5.4,Will you contractually commit to notifying Globex of ANY security incident within 24 hours?,security,restricted,IR-4,policy says 48h for breaches
+1. InfoSec,1.5.5,What is the limit of indemnity of your cyber insurance policy?,security,gap,,trap
+1. InfoSec,1.5.6,Do you offer source code escrow?,security,gap,,trap
+1. InfoSec,1.10,How frequently is your incident response plan tested?,security,high,IR-6,ref '1.10' stored as text; out of sequence
+2. AI Governance,AI-01,Describe the AI-enabled features in your product and their intended use.,ai_governance,high,AIG-1;MC-2,
+2. AI Governance,AI-02,"Do you train, fine-tune or otherwise improve any AI model using customer data, including prompts and outputs?",ai_governance,high,AIG-3,duplicate of 3.12
+2. AI Governance,AI-03,"Which third-party AI model providers process our data, and in which locations?",ai_governance,high,SUB-1;AIG-2,answer is in privacy doc
+2. AI Governance,AI-04,Which specific foundation model(s) and version(s) power your AI features?,ai_governance,gap,,"trap: MC-4 says versions pinned, none named"
+2. AI Governance,AI-05,"How long do your model providers retain our prompts and outputs, and for what purpose?",ai_governance,high,AIG-3,
+2. AI Governance,AI-06,How long are AI prompts and outputs stored within your platform? Can we shorten or disable this?,ai_governance|privacy,high,DR-4,answer is in retention doc
+2. AI Governance,AI-07,Are AI features enabled by default? Can our administrators disable them or restrict them to specific user groups?,ai_governance,high,AIG-4,
+2. AI Governance,AI-08,How do you prevent AI features from exposing content to users who are not authorised to see it?,ai_governance,high,AIG-5;MC-7,
+2. AI Governance,AI-09,Describe the human oversight applied to AI-generated outputs before they are used.,ai_governance,high,AIG-6,
+2. AI Governance,AI-10,"Do you have a body responsible for AI governance? Describe its membership, cadence and approval process.",ai_governance,high,AIG-7,
+2. AI Governance,AI-11,"Are you certified to ISO/IEC 42001? If not, by what date do you expect to achieve certification?",ai_governance,partial,AIG-8,in progress; no date
+2. AI Governance,AI-12,How does your AI programme align to the NIST AI Risk Management Framework?,ai_governance,high,AIG-8,
+2. AI Governance,AI-13,"How have you classified your AI system(s) under the EU AI Act, and which obligations apply to you?",ai_governance,high,AIG-9,
+2. AI Governance,AI-14,"Do you maintain an inventory of AI systems, including internally used AI tools?",ai_governance,high,AIG-8,
+2. AI Governance,AI-15,How do you evaluate AI outputs for accuracy and hallucination before release? Please include any acceptance thresholds.,ai_governance,high,AIG-10;MC-5,95% threshold in MC-5
+2. AI Governance,AI-16,Do you engage independent third parties to red-team your AI systems?,ai_governance,medium,AIG-10,internal adversarial testing only
+2. AI Governance,AI-17,How do you test for and mitigate bias in AI outputs?,ai_governance,medium,AIG-7,impact assessment covers fairness; no testing described
+2. AI Governance,AI-18,What are the known limitations of your AI features?,ai_governance,high,MC-6,
+2. AI Governance,AI-19,Do you watermark or otherwise machine-mark AI-generated content?,ai_governance,medium,AIG-6,UI labelling covered; watermarking not
+2. AI Governance,AI-20,Can you guarantee that AI-generated summaries and minutes are accurate and complete?,ai_governance,restricted,MC-6,guarantee
+2. AI Governance,AI-21,"If an AI incident occurs, how quickly can AI features be disabled?",ai_governance|security,high,IR-5,answer is in IR doc
+2. AI Governance,AI-22,Do you perform an AI impact assessment and/or DPIA before launching new AI features?,ai_governance|privacy,high,AIG-7;PRV-5,two docs
+2. AI Governance,AI-23,"Are AI features supported in languages other than English (e.g. French, German)?",ai_governance,medium,MC-2;MC-6,
+2. AI Governance,AI-24,Will you indemnify Globex against third-party intellectual property claims arising from AI-generated output?,ai_governance|privacy,restricted,,indemnity
+2. AI Governance,AI-25,Are your AI features used to make automated decisions that have legal or similarly significant effects on individuals?,ai_governance,high,AIG-1,
+3. Data Protection,3.1,Please confirm your role (controller or processor) in respect of Globex personal data.,privacy,high,PRV-1,
+3. Data Protection,3.2,Which data protection laws and regulations does your processing comply with?,privacy,high,PRV-2,
+3. Data Protection,3.3,Please provide the contact details of your Data Protection Officer.,privacy,high,PRV-3,
+3. Data Protection,3.4(a),a) How long after contract termination is our data deleted from (i) production and (ii) backups?,privacy,high,DR-2;DR-3,sub-question
+3. Data Protection,3.4(b),b) Will you provide a certificate of deletion?,privacy,high,DR-2,sub-question
+3. Data Protection,3.4(c),c) What happens to items our users delete during the subscription?,privacy,high,DR-1,sub-question
+3. Data Protection,3.5,"How much notice do you give before engaging a new sub-processor, and can we object?",privacy,high,SUB-3,
+3. Data Protection,3.6,"Is any personal data transferred outside the UK/EEA? If so, which transfer mechanisms are used?",privacy,high,SUB-4,
+3. Data Protection,3.7,How will you support Globex in responding to data subject requests?,privacy,high,PRV-4,
+3. Data Protection,3.8,Is the platform designed for storing special category personal data (e.g. health data)?,privacy,high,PRV-7,
+3. Data Protection,3.9,Is production customer data ever used in development or test environments?,privacy|security,high,ISP-8,answer is in security doc
+3. Data Protection,3.10,"What is your organisation's carbon footprint, and do you have a net-zero target?",privacy|security,gap,,trap: off-topic ESG question
+3. Data Protection,3.11,Do you accept unlimited liability for breaches of data protection obligations?,privacy,restricted,,liability
+3. Data Protection,3.12,Is Globex data used to improve your products or to train AI models?,ai_governance|privacy,medium,AIG-3,policy rules out AI training but not general product improvement (corrected after run 1)
