@@ -192,7 +192,7 @@ Trail in [`run4_C_tuned_audit.csv`](results/run4_C_tuned_audit.csv).
 
 One gap it exposed: two *auto-approved* answers carried reviewer notes that no human would see. For example: *"confirm the certificate is in date before sending."* Notes on auto-approved answers need to reach a person.
 
-*Earlier offline testing: That covered a review paused and resumed, a second run reusing approved answers with zero Claude calls for them, a restricted reuse routed to a human, and a stale answer refused after its policy version changed. *
+*Earlier offline testing covered a review paused and resumed, a second run reusing approved answers with zero Claude calls for them, a restricted reuse routed to a human, and a stale answer refused after its policy version changed.*
 
 **Next:** route auto-approved answers that carry a reviewer note to a person, show library reuse live, then Phase 4 (Streamlit review UI, held-out evals, `src/` package).
 
