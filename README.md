@@ -190,11 +190,11 @@ Trail in [`run4_C_tuned_audit.csv`](results/run4_C_tuned_audit.csv).
 - No draft named the prospect.
 - Caveats stayed in reviewer notes, never in the answer.
 
-One gap it exposed: two *auto-approved* answers carried reviewer notes that no human would see. For example: *"confirm the certificate is in date before sending."* Notes on auto-approved answers need to reach a person.
+One gap it exposed: two *auto-approved* answers carried reviewer notes that no human would see. For example: *"confirm the certificate is in date before sending."* Notes on auto-approved answers need to reach a person. **Fixed:** a new `note_check` step asks Jev whether the note says something must be checked before sending. If so, the answer is held for a human. Purely informational notes, like *"SUB-3 doesn't say what happens after an objection"*, don't hold anything up.
 
 *Earlier offline testing covered a review paused and resumed, a second run reusing approved answers with zero Claude calls for them, a restricted reuse routed to a human, and a stale answer refused after its policy version changed.*
 
-**Next:** route auto-approved answers that carry a reviewer note to a person, show library reuse live, then Phase 4 (Streamlit review UI, held-out evals, `src/` package).
+**Next:** confirm the note check live, show library reuse live, then Phase 4 (Streamlit review UI, held-out evals, `src/` package).
 
 ## Quick start (Google Colab)
 
