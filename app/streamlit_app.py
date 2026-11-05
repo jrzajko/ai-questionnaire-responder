@@ -127,8 +127,43 @@ def question_card(r: dict, show_decision: bool = True):
 
 
 # ------------------------------------------------------------------ demo pages
+FINAL_RUN = "C: Jev hybrid + review & library (run 7)"
+
+
+def what_to_do(text: str):
+    """One consistent 'what to do here' box at the top of every page."""
+    st.info(f"**What to do here:** {text}", icon="👉")
+
+
+def go_to_question(ref: str):
+    st.session_state["browse_run"] = FINAL_RUN
+    st.session_state["browse_ref"] = ref
+    st.switch_page(P_BROWSE)
+
+
 def page_overview():
     st.title("🛡️ AI Security Questionnaire Responder")
+    with st.container(border=True):
+        st.markdown("#### 👋 Start here: a 2-minute tour")
+        st.markdown("""This is a **read-only demo** built from real runs of the tool, so nothing you click costs anything or
+changes anything. The tool answers a prospect's security questionnaire from the vendor's policies, and only asks a
+human when it isn't sure. Four stops show how:
+
+1. **An answer with its evidence:** follow one answer back to the exact policy clause behind it.
+2. **A trap it refused:** the policy doesn't cover this question, so the tool escalated instead of guessing.
+3. **Play the reviewer:** work through the answers the tool wasn't sure about. Approve, edit or reject each one.
+4. **The policy pack:** the only documents the tool is allowed to use.""")
+        b = st.columns(4)
+        if b[0].button("1 · An answer with evidence", icon="🔎", use_container_width=True):
+            go_to_question("1.5.3")
+        if b[1].button("2 · A trap it refused", icon="🪤", use_container_width=True):
+            go_to_question("AI-04")
+        if b[2].button("3 · Play the reviewer", icon="🧑‍⚖️", use_container_width=True):
+            st.switch_page(P_REVIEW)
+        if b[3].button("4 · The policy pack", icon="📚", use_container_width=True):
+            st.switch_page(P_POLICY)
+        st.caption("Or read on for the results, or use the menu on the left.")
+    st.subheader("What it is")
     st.markdown("""Prospects send B2B SaaS vendors long security and AI due-diligence questionnaires. This tool drafts every
 answer from the vendor's own policy pack, cites the exact clause, scores confidence from **measured signals**, and hands
 anything uncertain or risky to a human. Everything here is fictional: the vendor is **Acme SaaS** and the prospect is **Globex**.
@@ -144,6 +179,9 @@ LangGraph's `interrupt()` handles human review, and an answer library learns fro
     c[2].metric("Cost per 60-question run", m["Cost per run"], "-91% vs Opus (est. $2.20)", delta_color="inverse")
     c[3].metric("Reused from the answer library", int((df.library_hit == "True").sum()))
     st.subheader("Scorecard: same 60 questions, same answer key")
+    st.markdown("Each row is one version of the pipeline, run on the same questionnaire and checked against an answer key "
+                "written in advance. Read across: **unsafe auto-approvals must be 0**, then more auto-approved is better, "
+                "then cheaper is better.")
     rows = []
     for label, (f, cost, note) in RUNS.items():
         rows.append({"Pipeline": label, **run_metrics(load_run(f), cost),
@@ -161,22 +199,33 @@ all questions (LangGraph Send, in parallel) → review: interrupt() per uncertai
 
 def page_browse():
     st.title("Browse a run")
-    label = st.selectbox("Run", list(RUNS))
+    what_to_do("pick a question to see the answer, why it got its status, the claim-by-claim check, the cited policy "
+               "text and Jev's probabilities. Good ones to try: **1.5.3** (auto-approved with evidence), **AI-04** "
+               "(a trap it refused to answer) and **1.5.4** (a contractual commitment held for a human).")
+    runs = list(RUNS)
+    label = st.selectbox("Run", runs, index=runs.index(st.session_state.get("browse_run", FINAL_RUN)))
     df = load_run(RUNS[label][0])
     counts = df["status"].value_counts()
     st.markdown("  ·  ".join(f"{ICON.get(k, '')} {LABEL.get(k, k)}: **{v}**" for k, v in counts.items()))
     status = st.multiselect("Show", list(LABEL), default=[s for s in LABEL if s in counts], format_func=lambda s: LABEL[s])
     view = df[df.status.isin(status)]
-    choice = st.selectbox("Question", view.index, format_func=lambda i: f"{ICON.get(view.status[i], '')} [{view.ref[i]}] {view.question[i][:90]}")
+    options = list(view.index)
+    want = st.session_state.get("browse_ref")
+    start = next((n for n, i in enumerate(options) if view.ref[i] == want), 0)
+    choice = st.selectbox("Question", options, index=start if options else None,
+                          format_func=lambda i: f"{ICON.get(view.status[i], '')} [{view.ref[i]}] {view.question[i][:90]}")
     if choice is not None:
         question_card(df.loc[choice].to_dict())
 
 
 def page_review_demo():
     st.title("Review: how a human works the queue")
-    st.markdown("""These are the answers run 7 sent to a person, most important first: restricted questions, then
-escalations, then Low and Medium. In the real flow each decision resumes a paused LangGraph graph through
-`Command(resume=...)`. Here the decisions stay in your browser session.""")
+    what_to_do("you're the reviewer. For each answer, read *Why it got this status* to see what the tool wasn't sure "
+               "about, then choose ✅ **Approve** if the draft is right, ✏️ **Edit** to change it first, or ❌ **Reject** "
+               "to pass it to a subject-matter expert. Your choices stay in your browser and change nothing.")
+    st.caption("These are the 27 answers the final run sent to a person, most important first: commitments, then "
+               "questions the policy doesn't cover, then the less certain answers. In the real tool each decision "
+               "resumes a paused LangGraph graph through `Command(resume=...)`.")
     df = load_run(RUNS["C: Jev hybrid + review & library (run 7)"][0])
     rank = lambda r: (0 if '"restricted": true' in r["signals"] else 1 if r["status"] == "escalate" else
                       2 if r["confidence"] == "Low" else 3)
@@ -214,7 +263,9 @@ escalations, then Low and Medium. In the real flow each decision resumes a pause
 
 def page_policies():
     st.title("Acme SaaS policy pack")
-    st.markdown("The only source of truth. Every answer must cite a section ID from these documents, such as `AIG-3`.")
+    what_to_do("pick a document to read. These fictional policies are the tool's only source of truth, and every "
+               "answer cites a section ID from them, such as `ISP-6`. Some topics are deliberately missing (a bug bounty, "
+               "PCI DSS, cyber insurance) to test that the tool refuses to guess.")
     docs = policy_docs()
     name = st.selectbox("Document", list(docs))
     st.markdown(docs[name].split("---", 2)[-1])
@@ -223,6 +274,8 @@ def page_policies():
 # ------------------------------------------------------------------ live mode
 def page_live():
     st.title("Live run")
+    what_to_do("this is the real tool. It calls Claude and Jev with the owner's API keys, so it's password-protected. "
+               "Without the password, the demo pages show the results of real runs.")
     password = secret("APP_PASSWORD")
     if not password:
         st.warning("Live mode is switched off: no APP_PASSWORD is configured.")
@@ -316,9 +369,10 @@ def page_live():
 
 
 # ------------------------------------------------------------------ navigation
-pages = {"Demo (saved runs)": [st.Page(page_overview, title="Overview", icon="🏠", default=True),
-                               st.Page(page_browse, title="Browse a run", icon="🔎"),
-                               st.Page(page_review_demo, title="Review demo", icon="🧑‍⚖️"),
-                               st.Page(page_policies, title="Policy pack", icon="📚")],
+P_OVERVIEW = st.Page(page_overview, title="Overview", icon="🏠", default=True)
+P_BROWSE = st.Page(page_browse, title="Browse a run", icon="🔎")
+P_REVIEW = st.Page(page_review_demo, title="Review demo", icon="🧑‍⚖️")
+P_POLICY = st.Page(page_policies, title="Policy pack", icon="📚")
+pages = {"Demo (saved runs)": [P_OVERVIEW, P_BROWSE, P_REVIEW, P_POLICY],
          "Live (password)": [st.Page(page_live, title="Live run", icon="⚡")]}
 st.navigation(pages).run()
