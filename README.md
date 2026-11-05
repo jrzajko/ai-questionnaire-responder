@@ -13,7 +13,7 @@ B2B SaaS vendors receive long questionnaires from prospects ("Do you encrypt dat
 | 1 | Policy pack, FTS5 retrieval, one question end to end with citations + confidence | ✅ Done |
 | 2 | Whole questionnaire in parallel (LangGraph `Send`), messy XLSX/CSV in, completed XLSX + audit trail out | ✅ Done, two runs below |
 | 2b | Cost: tiered Claude models vs a hybrid with a decision model | ✅ Done: Jev hybrid confirmed at 36/41 auto-approved, 0 unsafe, $0.17 per run |
-| 3 | Human review with `interrupt()` + checkpointer, approved-answer library (learning loop) | ✅ Built and tested offline; live run pending |
+| 3 | Human review with `interrupt()` + checkpointer, approved-answer library (learning loop) | ✅ Built; first live review run done; library reuse to be shown live |
 | 4 | Streamlit UI, full evals, calibrated thresholds | Planned |
 
 ## How it works
@@ -185,9 +185,16 @@ Trail in [`run4_C_tuned_audit.csv`](results/run4_C_tuned_audit.csv).
   - an audit CSV with draft vs final answer, decision, reviewer, time and evidence;
   - the library itself (`answer_library.db`), to re-upload next time.
 
-*Status: tested offline end to end with stand-in models. That covered a review paused and resumed, a second run reusing approved answers with zero Claude calls for them, a restricted reuse routed to a human, and a stale answer refused after its policy version changed. A live run is next.*
+**First live run (smoke, 10 questions; [`run5_review_smoke_audit.csv`](results/run5_review_smoke_audit.csv)):**
+- 4 answers were auto-approved and 6 went to review. The reviewer rejected all 6 to test the flow, and each rejection was recorded with name and time.
+- No draft named the prospect.
+- Caveats stayed in reviewer notes, never in the answer.
 
-**Next:** a live Phase 3 run, then Phase 4 (Streamlit review UI, held-out evals, `src/` package).
+One gap it exposed: two *auto-approved* answers carried reviewer notes that no human would see. For example: *"confirm the certificate is in date before sending."* Notes on auto-approved answers need to reach a person.
+
+*Earlier offline testing: That covered a review paused and resumed, a second run reusing approved answers with zero Claude calls for them, a restricted reuse routed to a human, and a stale answer refused after its policy version changed. *
+
+**Next:** route auto-approved answers that carry a reviewer note to a person, show library reuse live, then Phase 4 (Streamlit review UI, held-out evals, `src/` package).
 
 ## Quick start (Google Colab)
 
