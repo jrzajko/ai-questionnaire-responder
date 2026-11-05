@@ -113,6 +113,12 @@ To save cost, run 2 re-ran only **21 questions**: the 14 answerable questions ru
 
 A full 60-question run makes about 300 model calls.
 
+`notebooks/cost_comparison.ipynb` runs the same questionnaire through two cheaper pipelines, picked with `PIPELINE`:
+- **B:** Haiku + Sonnet.
+- **C:** a hybrid using the Jev decision model for every yes/no and pick-one judgement. It needs `TYPESAFE_API_KEY` as well.
+
+The notebook measures real token costs, and its last section builds an A / B / C scorecard against the answer key.
+
 ## Stack
 
 LangGraph (state graph, `Send` fan-out) · langchain-anthropic · Claude Opus 5.5 (specialists, grounding) · Claude Haiku 5.5 (routing) · SQLite FTS5 with BM25 ranking and Porter stemming · openpyxl · pandas
