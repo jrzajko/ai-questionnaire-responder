@@ -12,7 +12,7 @@ B2B SaaS vendors receive long questionnaires from prospects ("Do you encrypt dat
 |---|---|---|
 | 1 | Policy pack, FTS5 retrieval, one question end to end with citations + confidence | ✅ Done |
 | 2 | Whole questionnaire in parallel (LangGraph `Send`), messy XLSX/CSV in, completed XLSX + audit trail out | ✅ Done, two runs below |
-| 2b | Cost: tiered Claude models vs a hybrid with a decision model | In progress |
+| 2b | Cost: tiered Claude models vs a hybrid with a decision model | ✅ Compared (run 3); one confirming run pending |
 | 3 | Human review with `interrupt()` + checkpointer, approved-answer library (learning loop) | Planned |
 | 4 | Streamlit UI, full evals, calibrated thresholds | Planned |
 
@@ -102,7 +102,44 @@ To save cost, run 2 re-ran only **21 questions**: the 14 answerable questions ru
 
 **Projected over the full 60** (the other 39 weren't re-run): about 34 / 41 answerable questions auto-approved, an auto-answer rate of roughly 57% against 45% in run 1.
 
-**Next:** cut cost per run. Run 1 cost an estimated ~$2.20 on Opus. The next experiment compares a cheaper all-Claude pipeline (Haiku + Sonnet) with a hybrid that hands the yes/no and pick-one judgements to a decision model with calibrated probabilities.
+## Results: three pipelines compared (run 3)
+
+The same 60 questions and the same answer key, run through `notebooks/cost_comparison.ipynb`:
+
+- **A:** Opus does everything (run 1).
+- **B:** Haiku classifies, searches and checks; Sonnet writes.
+- **C:** a hybrid. [Jev](https://docs.typesafe.ai), a *decision model* from TypeSafe AI, makes every yes/no and pick-one judgement with calibrated probabilities. Claude only writes (Sonnet) and extracts claims (Haiku). Code checks quotes and numbers.
+
+| | A: Opus | B: Claude tiered | **C: Jev hybrid** |
+|---|---|---|---|
+| Correct outcome | 46 / 60 | 46 / 60 | 45 / 60 |
+| Answerable questions auto-approved | 27 / 41 | 30 / 41 | **31 / 41** |
+| **Unsafe auto-approvals** | **0** | **0** | **0** |
+| Traps escalated / restricted held back | 6/6, 5/5 | 6/6, 5/5 | 6/6, 5/5 |
+| Cost per 60-question run | ≈ $2.20 (estimated) | $0.34 (measured) | **$0.16 (measured)** |
+| Wall-clock time | minutes | 107 s | **38 s** |
+
+Files: [`run3_B_full_audit.csv`](results/run3_B_full_audit.csv), [`run3_C_full_audit.csv`](results/run3_C_full_audit.csv), plus measured token usage in the matching `_cost.json` files. A ran before the run 2 prompt fixes; B and C include them.
+
+**What the comparison shows**
+
+- **Safety holds at a fraction of the cost.** Both cheaper pipelines escalated every trap and held back every restricted question. C did slightly more useful work than A for about 7% of the cost.
+- **Why C is cheapest.**
+  - Jev's relevance gate passes Sonnet only the sections that matter, usually one. In total, B's Sonnet read about 2.3× more input than C's.
+  - Questions where no section passes are escalated with no Claude call at all: 15 of 60 in C.
+  - Jev's 551 requests cost about a third of a cent in total.
+- **The strongest argument for the hybrid is tunability, not price.**
+  - B's misses come from Haiku's word-based verdicts (17 "inferred" claims, two over-flagged commitments). Changing that means rewriting prompts and paying for another run.
+  - C's misses come mostly from **thresholds on saved probabilities**, which can be re-scored for free. Jev rated every restricted question 0.83–0.96 for asking a commitment, and every other question 0.38 or lower, apart from one borderline wording at 0.62.
+  - Moving two thresholds ("uncertain" from 0.3 to 0.4; completeness from 0.7 to 0.6) re-scores the same run to **50 / 60 correct, 36 / 41 auto-approved, still 0 unsafe**, with no new API calls. *Caveat: those thresholds were tuned on the same 60 questions, so a held-out set is needed to confirm them (Phase 4).*
+- **What thresholds can't fix in C.**
+  - The relevance gate is too strict on two-part questions ("SAML **and** SCIM?"), because each section answers only half.
+  - Five implied-only questions were escalated without a draft. That's safe, but less helpful.
+  - One answer lost its citation in Haiku's claim extraction.
+
+  The notebook now includes fixes for all three: a gate question that accepts partial answers, the tuned thresholds, and a fallback when the claim source is blank. They await a confirming run.
+
+**Next:** that confirming run for pipeline C, then Phase 3 (human review and the answer library).
 
 ## Quick start (Google Colab)
 
