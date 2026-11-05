@@ -13,7 +13,7 @@ This tool:
 - routes anything uncertain, risky or uncovered to a person;
 - learns from what that person approves.
 
-**Live demo:** *Streamlit link added after deployment.* · Everything is fictional: the vendor is **Acme SaaS** and the prospect is **Globex Holdings**.
+**[▶ Live demo](https://ai-questionnaire-responder-hhsgzzuxirkgiuprljt46u.streamlit.app/)**: demo mode is free to explore; live mode is password-protected. · Everything is fictional: the vendor is **Acme SaaS** and the prospect is **Globex Holdings**.
 
 ![Demo: scorecard, claim checks, Jev's relevance gate, the review queue](docs/demo.gif)
 
