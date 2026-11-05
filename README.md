@@ -194,7 +194,9 @@ One gap it exposed: two *auto-approved* answers carried reviewer notes that no h
 
 *Earlier offline testing covered a review paused and resumed, a second run reusing approved answers with zero Claude calls for them, a restricted reuse routed to a human, and a stale answer refused after its policy version changed.*
 
-**Next:** confirm the note check live, show library reuse live, then Phase 4 (Streamlit review UI, held-out evals, `src/` package).
+**Note check confirmed live (second smoke run):** the ISO 27001 answer, auto-approved before, now goes to review with *"reviewer note asks for a check before sending (p=0.95)"*. The sub-processor answer, whose note is only informational, stays auto-approved. One effect to measure on a full run: the drafter writes cautious notes often, so the auto-approval rate may drop.
+
+**Next:** measure the note check's effect on a full run, show library reuse live, then Phase 4 (Streamlit review UI, held-out evals, `src/` package).
 
 ## Quick start (Google Colab)
 
