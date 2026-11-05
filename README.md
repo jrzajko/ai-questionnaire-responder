@@ -13,7 +13,7 @@ B2B SaaS vendors receive long questionnaires from prospects ("Do you encrypt dat
 | 1 | Policy pack, FTS5 retrieval, one question end to end with citations + confidence | ✅ Done |
 | 2 | Whole questionnaire in parallel (LangGraph `Send`), messy XLSX/CSV in, completed XLSX + audit trail out | ✅ Done, two runs below |
 | 2b | Cost: tiered Claude models vs a hybrid with a decision model | ✅ Done: Jev hybrid confirmed at 36/41 auto-approved, 0 unsafe, $0.17 per run |
-| 3 | Human review with `interrupt()` + checkpointer, approved-answer library (learning loop) | ✅ Built; first live review run done; library reuse to be shown live |
+| 3 | Human review with `interrupt()` + checkpointer, approved-answer library (learning loop) | ✅ Built; full live review run done (run 6); library reuse to be shown live |
 | 4 | Streamlit UI, full evals, calibrated thresholds | Planned |
 
 ## How it works
@@ -196,7 +196,17 @@ One gap it exposed: two *auto-approved* answers carried reviewer notes that no h
 
 **Note check confirmed live (second smoke run):** the ISO 27001 answer, auto-approved before, now goes to review with *"reviewer note asks for a check before sending (p=0.95)"*. The sub-processor answer, whose note is only informational, stays auto-approved. One effect to measure on a full run: the drafter writes cautious notes often, so the auto-approval rate may drop.
 
-**Next:** measure the note check's effect on a full run, show library reuse live, then Phase 4 (Streamlit review UI, held-out evals, `src/` package).
+**Full run with review (run 6; [`run6_full_review_audit.csv`](results/run6_full_review_audit.csv)):**
+- All 60 questions, then 31 reviewed. One answer was approved and one edited, and both went into the library. The other 29 were rejected as a test.
+- 0 unsafe auto-approvals, and no draft named the prospect.
+- The "customer" wording fixed both run-4 contradictions caused by Jev's literal reading.
+- **But auto-approvals fell from 36 to 29 of 41.** The note check alone held back 7 answerable questions. Sonnet wrote a note on nearly every answer, and the hold line (0.4) was too low.
+  - Notes on answers that stayed auto-approved scored 0.10–0.39.
+  - The 7 held scored 0.45–0.95. The highest were the genuinely useful ones: *"confirm the certificate is current"* (0.71), and *"the policy doesn't say when the 15-minute clock starts"* (0.95).
+  - Raising the hold line to 0.7 would have released the 3 informational notes, re-scoring to 32 / 41 with no new API calls. The drafting prompt now also asks for a note only when the reviewer should act on something.
+  - That's the precision/recall trade-off of an extra safety layer, and the saved probabilities make it measurable.
+
+**Next:** confirm the tightened note check on a full run, show library reuse live, then Phase 4 (Streamlit review UI, held-out evals, `src/` package).
 
 ## Quick start (Google Colab)
 
