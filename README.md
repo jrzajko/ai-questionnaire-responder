@@ -12,7 +12,7 @@ B2B SaaS vendors receive long questionnaires from prospects ("Do you encrypt dat
 |---|---|---|
 | 1 | Policy pack, FTS5 retrieval, one question end to end with citations + confidence | ✅ Done |
 | 2 | Whole questionnaire in parallel (LangGraph `Send`), messy XLSX/CSV in, completed XLSX + audit trail out | ✅ Done, two runs below |
-| 2b | Cost: tiered Claude models vs a hybrid with a decision model | ✅ Compared (run 3); one confirming run pending |
+| 2b | Cost: tiered Claude models vs a hybrid with a decision model | ✅ Done: Jev hybrid confirmed at 36/41 auto-approved, 0 unsafe, $0.17 per run |
 | 3 | Human review with `interrupt()` + checkpointer, approved-answer library (learning loop) | Planned |
 | 4 | Streamlit UI, full evals, calibrated thresholds | Planned |
 
@@ -137,9 +137,34 @@ Files: [`run3_B_full_audit.csv`](results/run3_B_full_audit.csv), [`run3_C_full_a
   - Five implied-only questions were escalated without a draft. That's safe, but less helpful.
   - One answer lost its citation in Haiku's claim extraction.
 
-  The notebook now includes fixes for all three: a gate question that accepts partial answers, the tuned thresholds, and a fallback when the claim source is blank. They await a confirming run.
+## Results: tuned Jev hybrid (run 4)
 
-**Next:** that confirming run for pipeline C, then Phase 3 (human review and the answer library).
+Pipeline C re-run on all 60 questions with three changes:
+- the tuned thresholds;
+- a gate question that accepts passages answering *part* of a question;
+- a fallback for claims Haiku returns without a source.
+
+Trail in [`run4_C_tuned_audit.csv`](results/run4_C_tuned_audit.csv).
+
+| | A: Opus | C: Jev hybrid (run 3) | **C: tuned (run 4)** |
+|---|---|---|---|
+| Correct outcome | 46 / 60 | 45 / 60 | **50 / 60** |
+| Answerable questions auto-approved | 27 / 41 | 31 / 41 | **36 / 41** |
+| Unsafe auto-approvals | 0 | 0 | **0** |
+| Cost per run | ≈ $2.20 (est.) | $0.16 | **$0.17** |
+| Time | minutes | 38 s | **33 s** |
+
+**The re-scored prediction held exactly:** 50 / 60 and 36 / 41, confirmed by a real run with zero unsafe outcomes. Against the Opus baseline, that's 9 more answers ready to send without human review, at about 8% of the cost.
+
+**What's left (10 questions, all routed to a human, so none unsafe):**
+- **Five implied-only questions are escalated rather than drafted.** BYOK, external red-teaming, bias testing, watermarking and language support: the policy only hints at an answer, and Sonnet declined to draft one.
+- **Jev's literal reading (a known limitation in TypeSafe's docs).** Drafts that named the prospect ("Globex is the data controller") were judged to **contradict** a policy that says "the customer is the data controller". This caused 2 of the 10 misses. Planned fix: answers should say "the customer", never the prospect's name. That also makes approved answers reusable across prospects in the Phase 3 answer library.
+- **Two-part questions on the relevance line.** For "SAML **and** SCIM?", the evidence check now passes (0.92), but the SSO section scored 0.41 on relevance, against a 0.45 floor.
+- **One borderline commitment wording.** "Will you provide a certificate of deletion?" scored 0.61, so it was held for review.
+
+*Caveat: the thresholds were tuned on these same 60 questions. A held-out question set (Phase 4) is needed to confirm they generalise.*
+
+**Next:** Phase 3 (human review with `interrupt()`, and the approved-answer library).
 
 ## Quick start (Google Colab)
 

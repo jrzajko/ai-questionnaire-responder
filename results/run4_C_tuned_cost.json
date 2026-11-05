@@ -1,0 +1,42 @@
+{
+  "pipeline": "C",
+  "run_mode": "full",
+  "questions": 60,
+  "seconds": 33,
+  "cost_usd": 0.16901,
+  "prices": {
+    "claude-opus-5-5": [
+      4.0,
+      20.0
+    ],
+    "claude-sonnet-5-5": [
+      2.0,
+      10.0
+    ],
+    "claude-haiku-5-5": [
+      0.1,
+      0.5
+    ],
+    "jev": [
+      0.042,
+      0.0
+    ]
+  },
+  "usage": {
+    "jev": {
+      "calls": 561,
+      "input_tokens": 240749,
+      "output_tokens": 27387
+    },
+    "claude-sonnet-5-5": {
+      "calls": 50,
+      "input_tokens": 51525,
+      "output_tokens": 4204
+    },
+    "claude-haiku-5-5": {
+      "calls": 44,
+      "input_tokens": 37469,
+      "output_tokens": 20115
+    }
+  }
+}
