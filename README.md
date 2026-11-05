@@ -11,7 +11,8 @@ B2B SaaS vendors receive long questionnaires from prospects ("Do you encrypt dat
 | Phase | What | Status |
 |---|---|---|
 | 1 | Policy pack, FTS5 retrieval, one question end to end with citations + confidence | ✅ Done |
-| 2 | Whole questionnaire in parallel (LangGraph `Send`), messy XLSX/CSV in, completed XLSX + audit trail out | ✅ Done, first real run below |
+| 2 | Whole questionnaire in parallel (LangGraph `Send`), messy XLSX/CSV in, completed XLSX + audit trail out | ✅ Done, two runs below |
+| 2b | Cost: tiered Claude models vs a hybrid with a decision model | In progress |
 | 3 | Human review with `interrupt()` + checkpointer, approved-answer library (learning loop) | Planned |
 | 4 | Streamlit UI, full evals, calibrated thresholds | Planned |
 
@@ -74,7 +75,34 @@ All 60 Globex questions, Claude Opus 5.5 specialists and grounding, Claude Haiku
 
 It also caught a genuine gap the answer key had missed. *"Is our data used to improve your products or train AI?"*: the policy rules out AI training but says nothing about product improvement. The answer key has been corrected.
 
-**Next run:** tighter classifier definition, "answer only what was asked" drafting, and meaning-based (not wording-based) grounding verdicts, with the verbatim-quote check kept in code.
+## Results: prompt fixes (run 2)
+
+Three prompt changes, all now in the notebook:
+- a stricter definition of a "commitment request" for the classifier;
+- drafting that answers only what was asked;
+- grounding verdicts judged on meaning rather than wording, with the verbatim-quote check still enforced in code.
+
+To save cost, run 2 re-ran only **21 questions**: the 14 answerable questions run 1 sent to review, the corrected 3.12, and 6 safety checks (traps, restricted and implied-only questions). Trail in [`results/run2_fixes_audit.csv`](results/run2_fixes_audit.csv).
+
+| On these 21 questions | Run 1 | Run 2 |
+|---|---|---|
+| Correct outcome | 7 / 21 | **14 / 21** |
+| Answerable questions wrongly sent to review | 14 | **7** |
+| Safety checks still held (traps escalated, restricted and implied-only kept from auto-approve) | 6 / 6 | **6 / 6** |
+| Average claims per answer | 5.0 | **3.2** |
+| Average answer length | 56 words | **40 words** |
+
+**Half the misses recovered, with no loss of safety.**
+- **Fixes that worked:** breach-notification timeframe and sub-processor notice are no longer treated as commitments, and answers are shorter and stick to the question.
+- **Still sent to review (7):**
+  - *Over-answering persists in places.* For example, the NIST answer still adds the AI Governance Group.
+  - *Connecting phrases get marked inferred*, such as "because of these limitations".
+  - *The classifier still reads "Will you provide a certificate of deletion?"* as a commitment.
+  - *Two are arguably right to go to review.* "Independent" SOC 2 audit and "includes production access" are not literally stated in the policy.
+
+**Projected over the full 60** (the other 39 weren't re-run): about 34 / 41 answerable questions auto-approved, an auto-answer rate of roughly 57% against 45% in run 1.
+
+**Next:** cut cost per run. Run 1 cost an estimated ~$2.20 on Opus. The next experiment compares a cheaper all-Claude pipeline (Haiku + Sonnet) with a hybrid that hands the yes/no and pick-one judgements to a decision model with calibrated probabilities.
 
 ## Quick start (Google Colab)
 
