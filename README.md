@@ -13,7 +13,7 @@ B2B SaaS vendors receive long questionnaires from prospects ("Do you encrypt dat
 | 1 | Policy pack, FTS5 retrieval, one question end to end with citations + confidence | ✅ Done |
 | 2 | Whole questionnaire in parallel (LangGraph `Send`), messy XLSX/CSV in, completed XLSX + audit trail out | ✅ Done, two runs below |
 | 2b | Cost: tiered Claude models vs a hybrid with a decision model | ✅ Done: Jev hybrid confirmed at 36/41 auto-approved, 0 unsafe, $0.17 per run |
-| 3 | Human review with `interrupt()` + checkpointer, approved-answer library (learning loop) | ✅ Built; full live review run done (run 6); library reuse to be shown live |
+| 3 | Human review with `interrupt()` + checkpointer, approved-answer library (learning loop) | ✅ Done: live review, pause/resume and library reuse (runs 5–7) |
 | 4 | Streamlit UI, full evals, calibrated thresholds | Planned |
 
 ## How it works
@@ -206,7 +206,24 @@ One gap it exposed: two *auto-approved* answers carried reviewer notes that no h
   - Raising the hold line to 0.7 would have released the 3 informational notes, re-scoring to 32 / 41 with no new API calls. The drafting prompt now also asks for a note only when the reviewer should act on something.
   - That's the precision/recall trade-off of an extra safety layer, and the saved probabilities make it measurable.
 
-**Next:** confirm the tightened note check on a full run, show library reuse live, then Phase 4 (Streamlit review UI, held-out evals, `src/` package).
+**Library reuse and the tightened note check (run 7; [`run7_library_reuse_audit.csv`](results/run7_library_reuse_audit.csv)):**
+
+| | Run 6 | **Run 7** |
+|---|---|---|
+| Correct outcome | 43 / 60 | **47 / 60** |
+| Answerable questions auto-approved | 29 / 41 | **33 / 41** |
+| Unsafe auto-approvals | 0 | **0** |
+| Drafts carrying a reviewer note | almost all | **16 of 44** |
+| Answers reused from the library | 0 | **2** |
+| Cost | $0.23 | **$0.20** |
+
+- **The library reused answers live.**
+  - ISO 27001, approved by the reviewer in run 6, matched with Jev same-question p=0.99. It was auto-approved with no Claude call and no review.
+  - The 24-hour commitment, edited in run 6, matched at p=0.98. Because it's a commitment, it came back to the reviewer as a draft rather than going out. Re-approving it didn't create a duplicate entry.
+- **The tightened note check held only notes that matter**, e.g. *"confirm whether the deletion clock starts at termination or after the export window"* (p=0.95). It no longer held routine commentary.
+- *Tested offline only:* refusing a stale library answer when its policy section changes version.
+
+**Phase 3 is complete.** Next is Phase 4: a Streamlit review screen, held-out evals, the `src/` package, and filling in Yes/No dropdown columns.
 
 ## Quick start (Google Colab)
 
@@ -235,5 +252,5 @@ LangGraph (state graph, `Send` fan-out) · langchain-anthropic · Claude Opus 5.
 
 ## Roadmap
 
-- **Phase 3:** `interrupt()` + checkpointer for approve / edit / reject on Medium, Low and restricted answers; an approved-answer library checked first; a separate reviewer note so caveats never leak into customer-facing text; auto-fill for Yes/No dropdown columns.
-- **Phase 4:** package the code into `src/responder/`, a Streamlit review UI, an eval runner (routing, citation coverage, LLM-judge faithfulness, auto-answer rate, escalation correctness, calibration of High), and thresholds calibrated against the golden set.
+- **Phase 3 (done):** `interrupt()` + checkpointer for approve / edit / reject; an approved-answer library checked first, with stale-policy detection; reviewer notes kept out of customer text, with Jev deciding which notes need a human.
+- **Phase 4:** package the code into `src/responder/`, a Streamlit review UI, auto-fill for Yes/No dropdown columns (a natural Jev pick-one question), an eval runner (routing, citation coverage, LLM-judge faithfulness, auto-answer rate, escalation correctness, calibration of High), and thresholds calibrated against the golden set.
