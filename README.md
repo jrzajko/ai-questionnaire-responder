@@ -220,7 +220,7 @@ One gap it exposed: two *auto-approved* answers carried reviewer notes that no h
 - **The library reused answers live.**
   - ISO 27001, approved by the reviewer in run 6, matched with Jev same-question p=0.99. It was auto-approved with no Claude call and no review.
   - The 24-hour commitment, edited in run 6, matched at p=0.98. Because it's a commitment, it came back to the reviewer as a draft rather than going out. Re-approving it didn't create a duplicate entry.
-- **The tightened note check held only notes that matter**, e.g. *"confirm whether the deletion clock starts at termination or after the export window"* (p=0.95). It no longer held routine commentary.
+- **The tightened note check held only notes that matter**, e.g. *"The policy is ambiguous on whether the 30-day production deletion window starts at termination or at the end of the 30-day export period"* (p=0.95). It no longer held routine commentary.
 - *Tested offline only:* refusing a stale library answer when its policy section changes version.
 
 **Phase 3 is complete.** Next is Phase 4: a Streamlit review screen, held-out evals, the `src/` package, and filling in Yes/No dropdown columns.
