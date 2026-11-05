@@ -149,20 +149,20 @@ def page_overview():
 changes anything. The tool answers a prospect's security questionnaire from the vendor's policies, and only asks a
 human when it isn't sure. Four stops show how:
 
-1. **An answer with its evidence:** follow one answer back to the exact policy clause behind it.
-2. **A trap it refused:** the policy doesn't cover this question, so the tool escalated instead of guessing.
-3. **Play the reviewer:** work through the answers the tool wasn't sure about. Approve, edit or reject each one.
-4. **The policy pack:** the only documents the tool is allowed to use.""")
+1. 🔎 **Browse answers, one with evidence:** follow an answer back to the exact policy clause behind it.
+2. 🔎 **Browse answers, a trap:** the policy doesn't cover this question, so the tool escalated instead of guessing.
+3. 🧑‍⚖️ **Review queue:** play the reviewer on the answers the tool wasn't sure about. Approve, edit or reject each one.
+4. 📚 **Policy pack:** the only documents the tool is allowed to use.""")
         b = st.columns(4)
-        if b[0].button("1 · An answer with evidence", icon="🔎", use_container_width=True):
+        if b[0].button("Browse answers: evidence", icon="🔎", use_container_width=True):
             go_to_question("1.5.3")
-        if b[1].button("2 · A trap it refused", icon="🪤", use_container_width=True):
+        if b[1].button("Browse answers: a trap", icon="🔎", use_container_width=True):
             go_to_question("AI-04")
-        if b[2].button("3 · Play the reviewer", icon="🧑‍⚖️", use_container_width=True):
+        if b[2].button("Review queue", icon="🧑‍⚖️", use_container_width=True):
             st.switch_page(P_REVIEW)
-        if b[3].button("4 · The policy pack", icon="📚", use_container_width=True):
+        if b[3].button("Policy pack", icon="📚", use_container_width=True):
             st.switch_page(P_POLICY)
-        st.caption("Or read on for the results, or use the menu on the left.")
+        st.caption("The same pages are in the menu on the left. Or read on for the results.")
     st.subheader("What it is")
     st.markdown("""Prospects send B2B SaaS vendors long security and AI due-diligence questionnaires. This tool drafts every
 answer from the vendor's own policy pack, cites the exact clause, scores confidence from **measured signals**, and hands
@@ -198,7 +198,7 @@ all questions (LangGraph Send, in parallel) → review: interrupt() per uncertai
 
 
 def page_browse():
-    st.title("Browse a run")
+    st.title("🔎 Browse answers")
     what_to_do("pick a question to see the answer, why it got its status, the claim-by-claim check, the cited policy "
                "text and Jev's probabilities. Good ones to try: **1.5.3** (auto-approved with evidence), **AI-04** "
                "(a trap it refused to answer) and **1.5.4** (a contractual commitment held for a human).")
@@ -219,7 +219,7 @@ def page_browse():
 
 
 def page_review_demo():
-    st.title("Review: how a human works the queue")
+    st.title("🧑‍⚖️ Review queue")
     what_to_do("you're the reviewer. For each answer, read *Why it got this status* to see what the tool wasn't sure "
                "about, then choose ✅ **Approve** if the draft is right, ✏️ **Edit** to change it first, or ❌ **Reject** "
                "to pass it to a subject-matter expert. Your choices stay in your browser and change nothing.")
@@ -262,7 +262,7 @@ def page_review_demo():
 
 
 def page_policies():
-    st.title("Acme SaaS policy pack")
+    st.title("📚 Policy pack")
     what_to_do("pick a document to read. These fictional policies are the tool's only source of truth, and every "
                "answer cites a section ID from them, such as `ISP-6`. Some topics are deliberately missing (a bug bounty, "
                "PCI DSS, cyber insurance) to test that the tool refuses to guess.")
@@ -273,7 +273,7 @@ def page_policies():
 
 # ------------------------------------------------------------------ live mode
 def page_live():
-    st.title("Live run")
+    st.title("⚡ Live run")
     what_to_do("this is the real tool. It calls Claude and Jev with the owner's API keys, so it's password-protected. "
                "Without the password, the demo pages show the results of real runs.")
     password = secret("APP_PASSWORD")
@@ -370,8 +370,8 @@ def page_live():
 
 # ------------------------------------------------------------------ navigation
 P_OVERVIEW = st.Page(page_overview, title="Overview", icon="🏠", default=True)
-P_BROWSE = st.Page(page_browse, title="Browse a run", icon="🔎")
-P_REVIEW = st.Page(page_review_demo, title="Review demo", icon="🧑‍⚖️")
+P_BROWSE = st.Page(page_browse, title="Browse answers", icon="🔎")
+P_REVIEW = st.Page(page_review_demo, title="Review queue", icon="🧑‍⚖️")
 P_POLICY = st.Page(page_policies, title="Policy pack", icon="📚")
 pages = {"Demo (saved runs)": [P_OVERVIEW, P_BROWSE, P_REVIEW, P_POLICY],
          "Live (password)": [st.Page(page_live, title="Live run", icon="⚡")]}
