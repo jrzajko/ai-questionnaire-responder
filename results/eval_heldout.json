@@ -1,0 +1,16 @@
+{
+  "questions": 26,
+  "outcome_correct": 0.923,
+  "unsafe_auto_approvals": 0,
+  "answerable_auto_approved": "13/14",
+  "precision_of_high": 1.0,
+  "traps_escalated": "4/4",
+  "answerable_wrongly_escalated": 0,
+  "restricted_held": "3/3",
+  "routing_correct": 1.0,
+  "citation_coverage": 0.947,
+  "faithfulness": 1.0,
+  "errors": 0,
+  "cost_usd": 0.1409,
+  "seconds": 26
+}

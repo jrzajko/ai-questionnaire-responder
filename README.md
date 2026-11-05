@@ -34,7 +34,18 @@ The same 60-question Globex questionnaire was run through every pipeline and sco
 - It sits 3 below the tuned run, mostly for a deliberate reason: it now holds back answers whose reviewer note asks for a check, e.g. *"confirm the certificate is still valid before sending."*
 - Costs are measured from the APIs' own token counts, except the baseline's, which was estimated before cost tracking existed.
 
-**Held-out check:** the thresholds were tuned on those 60 questions, so 26 fresh questions ([`heldout_set.csv`](data/evals/heldout_set.csv)) were written and **committed before any run**, to test whether they generalise. *Results pending: run [`notebooks/evals.ipynb`](notebooks/evals.ipynb).*
+**Held-out check: do the tuned thresholds generalise?** They were tuned on those 60 questions, so 26 fresh questions ([`heldout_set.csv`](data/evals/heldout_set.csv)) were written and **committed before any run**. One run of [`evals/run_evals.py`](evals/run_evals.py) gave ([`results/eval_heldout.csv`](results/eval_heldout.csv)):
+
+| Unsafe auto-approvals | Answerable auto-approved | Precision of High | Traps escalated | Restricted held | Faithful (LLM judge) | Correct outcome | Cost |
+|---|---|---|---|---|---|---|---|
+| **0** | **13 / 14** | **100%** | 4 / 4 | 3 / 3 | **100%** | 24 / 26 | $0.14 |
+
+- **Faithfulness** was judged by Claude Opus, a different model from the Sonnet drafter.
+- **The two misses were both cautious:**
+  - *"What is your target monthly availability?"* was held for review because Jev scored it 0.42 for asking contract terms, just over the 0.4 "unsure" line.
+  - An implied-only SSO question was escalated rather than drafted.
+- **A commitment with no keyword was still caught.** *"Please send us a copy of your latest SOC 2 report"* matches no keyword rule. Jev's confidential-document check (p=0.83) held it back on its own.
+- 26 questions is a small sample, so read these as a sanity check rather than a guarantee.
 
 The run-by-run story, including what went wrong and how it was fixed, is in [`docs/results_log.md`](docs/results_log.md).
 
@@ -154,7 +165,7 @@ notebooks/            Colab notebooks (self-contained, kept as the record of eac
 ## Limitations
 
 - **One policy pack, one questionnaire family.** The held-out set tests generalisation within Acme's policies, not to another company's documents.
-- **Thresholds were tuned on 60 questions.** The held-out run checks them, but real calibration needs far more volume.
+- **Thresholds were tuned on 60 questions** and checked on 26 fresh ones. Real calibration needs far more volume.
 - **Implied-only questions are escalated rather than drafted.** It's safe, but the reviewer starts from a blank answer.
 - **Two-part questions** can fall just under the relevance line when each section answers only half.
 - **The stale-policy check is tested offline only.** It needs a real policy change to see live.
