@@ -1,256 +1,165 @@
 # AI Security Questionnaire Responder
 
-**LangGraph + Claude agents that draft grounded answers to security and AI due-diligence questionnaires, and know when to hand a question to a human.**
+[![tests](https://github.com/jrzajko/ai-questionnaire-responder/actions/workflows/tests.yml/badge.svg)](https://github.com/jrzajko/ai-questionnaire-responder/actions/workflows/tests.yml)
 
-B2B SaaS vendors receive long questionnaires from prospects ("Do you encrypt data at rest?", "Do you train AI on our data?", "How are you classified under the EU AI Act?"). Answering them means digging through internal policies, and a wrong answer can become a contractual promise. This project drafts every answer from the vendor's own documentation, cites the exact policy clause behind it, and scores its confidence from measured evidence rather than the model's self-assessment. Anything it can't back up goes to a human.
+**Grounded answers to security and AI due-diligence questionnaires, built with LangGraph, Claude and Jev, with a human in the loop.**
 
-> Everything here is fictional: the vendor (**Acme SaaS**), its policy pack and the prospect (**Globex Holdings plc**).
+Prospects send B2B SaaS vendors long questionnaires: *"Do you encrypt data at rest?"*, *"Do you train AI on our data?"*, *"How are you classified under the EU AI Act?"* Answering them means digging through internal policies, and a wrong answer can become a contractual promise.
 
-## Status
+This tool:
+- drafts every answer from the vendor's own policy pack;
+- cites the exact clause behind it;
+- scores confidence from **measured evidence**, never the model's opinion of itself;
+- routes anything uncertain, risky or uncovered to a person;
+- learns from what that person approves.
 
-| Phase | What | Status |
-|---|---|---|
-| 1 | Policy pack, FTS5 retrieval, one question end to end with citations + confidence | ✅ Done |
-| 2 | Whole questionnaire in parallel (LangGraph `Send`), messy XLSX/CSV in, completed XLSX + audit trail out | ✅ Done, two runs below |
-| 2b | Cost: tiered Claude models vs a hybrid with a decision model | ✅ Done: Jev hybrid confirmed at 36/41 auto-approved, 0 unsafe, $0.17 per run |
-| 3 | Human review with `interrupt()` + checkpointer, approved-answer library (learning loop) | ✅ Done: live review, pause/resume and library reuse (runs 5–7) |
-| 4 | Streamlit UI, full evals, calibrated thresholds | Planned |
+**Live demo:** *Streamlit link added after deployment.* · Everything is fictional: the vendor is **Acme SaaS** and the prospect is **Globex Holdings**.
+
+![Demo: scorecard, claim checks, Jev's relevance gate, the review queue](docs/demo.gif)
+
+## Results
+
+The same 60-question Globex questionnaire was run through every pipeline and scored against the same answer key ([`data/evals/golden_set.csv`](data/evals/golden_set.csv)).
+
+| Pipeline | Answerable auto-approved | **Unsafe auto-approvals** | Traps escalated | Restricted held | Cost per run |
+|---|---|---|---|---|---|
+| A: Opus does everything (baseline) | 27 / 41 | **0** | 6 / 6 | 5 / 5 | ≈ $2.20 (est.) |
+| B: Haiku + Sonnet | 30 / 41 | **0** | 6 / 6 | 5 / 5 | $0.34 |
+| C: Jev hybrid | 31 / 41 | **0** | 6 / 6 | 5 / 5 | $0.16 |
+| C: Jev hybrid, tuned | **36 / 41** | **0** | 6 / 6 | 5 / 5 | $0.17 |
+| **C + human review + answer library** (final) | 33 / 41 | **0** | 6 / 6 | 5 / 5 | **$0.20** |
+
+- An answer is **unsafe** if it was auto-approved although the answer key says a person must see it: a trap, a commitment, a partial answer. That number has been **0 in every run**.
+- The final pipeline auto-approves 6 more answers than the Opus baseline, at **about 9% of the cost**.
+- It sits 3 below the tuned run, mostly for a deliberate reason: it now holds back answers whose reviewer note asks for a check, e.g. *"confirm the certificate is still valid before sending."*
+- Costs are measured from the APIs' own token counts, except the baseline's, which was estimated before cost tracking existed.
+
+**Held-out check:** the thresholds were tuned on those 60 questions, so 26 fresh questions ([`heldout_set.csv`](data/evals/heldout_set.csv)) were written and **committed before any run**, to test whether they generalise. *Results pending: run [`notebooks/evals.ipynb`](notebooks/evals.ipynb).*
+
+The run-by-run story, including what went wrong and how it was fixed, is in [`docs/results_log.md`](docs/results_log.md).
 
 ## How it works
 
 ```mermaid
-flowchart LR
-    Q[Questionnaire<br/>XLSX / CSV] --> P[Find questions<br/>on every tab]
-    P --> F{{Send: fan out<br/>one task per question}}
-    F --> C[Classify<br/>security / AI governance / privacy<br/>+ restricted-topic check]
-    C --> S[Specialist agent<br/>searches the policy pack<br/>and drafts an answer]
-    S --> G[Grounding check<br/>claim by claim, verbatim quotes]
-    G --> K[Confidence score<br/>from measured signals]
-    K --> O[Completed XLSX<br/>+ audit CSV]
-    K -. Low / restricted .-> H[Human review<br/>Phase 3]
+flowchart TD
+    Q[Questionnaire XLSX/CSV<br/>any layout] --> P[Find questions on every tab]
+    P --> F{{LangGraph Send:<br/>one task per question, in parallel}}
+    F --> C[Jev: pick specialist<br/>+ 4 yes/no commitment checks]
+    C --> L{Answer library:<br/>Jev - same question as an<br/>approved one? policy unchanged?}
+    L -- hit --> R[Reuse approved answer<br/>no Claude call]
+    L -- miss --> S[Full-text search: top 6 sections]
+    S --> G[Jev relevance gate<br/>per section]
+    G -- nothing relevant --> E[Escalate<br/>no Claude call]
+    G --> D[Claude Sonnet drafts<br/>from the passing sections only]
+    D --> X[Claude Haiku: claims + verbatim quotes<br/>code: quote exists? numbers match?<br/>Jev: supports / contradicts / says nothing]
+    X --> N[Jev: does the reviewer note<br/>ask for a check?]
+    N --> K[Confidence from measured signals]
+    R --> H
+    E --> H
+    K --> H[Human review<br/>interrupt per uncertain answer<br/>approve · edit · reject]
+    H --> Z[Final XLSX in the prospect's layout<br/>+ audit trail + library learns]
 ```
 
-1. **Ingest.** It finds the question table on each tab, wherever the header row is. It works out which columns hold the ref, question, answer and evidence, and skips covers, section rows, footers and reviewer-only columns. Sub-questions like `a) …` get their parent row's context.
-2. **Classify.** A small Claude model routes each question to a specialist. Restricted topics (guarantees, contractual commitments, liability, SLA credits, confidential reports) are flagged by **both** a keyword rule and the classifier.
-3. **Specialist agent.** Claude Opus has a `search_policies` tool over a SQLite FTS5 index of the policy pack. It runs its own keyword searches, then drafts a 1–3 sentence answer from the retrieved sections only. All specialists search the whole pack, because answers often sit in another team's document; what differs is their instructions.
-4. **Grounding check.** A second pass splits the answer into claims. For each one it names the supporting section, copies a verbatim quote and gives a verdict: explicit, inferred or unsupported. **The code then checks the quote really appears in the cited section** and downgrades the claim if it doesn't.
-5. **Confidence.** The level comes from measured signals, not the model's opinion:
+**Each part does what it's best at:**
 
-| Level | Rule (thresholds calibrated with evals) | Action |
+| Job | Done by | Why |
 |---|---|---|
-| 🟢 High | Every claim supported **and** quoted verbatim, strong search match | Auto-approve |
-| 🟡 Medium | ≥ 75% of claims supported, some inferred | Human review |
-| 🔴 Low | Weak support, **or** restricted topic | Human review |
-| 🔴 Escalate | Policy pack doesn't cover it → `Not covered by policy, escalate` | Human writes the answer |
+| Writing customer-facing answers | **Claude Sonnet** | The only step that needs a capable writer |
+| Splitting answers into claims, copying quotes | **Claude Haiku** | Extraction: cheap and fast |
+| Every yes/no and pick-one judgement | **[Jev](https://docs.typesafe.ai)** (TypeSafe AI) | A *decision model*: returns calibrated probabilities instead of text, at about 1/100th of Opus's input price |
+| Arithmetic, numbers, verbatim matching | **Code** | Jev's docs say plainly that it isn't a calculator |
+| Contractual commitments, gaps, judgement calls | **A person** | Through LangGraph `interrupt()`, with every decision logged |
 
-## Data
+**Confidence is measured, not self-reported.** An answer is **High** only if all of these hold:
+- every claim is supported by a cited section;
+- every quote appears **verbatim** in that section, and every number matches;
+- Jev says the section supports it, with confidence ≥ 0.8;
+- the question isn't a commitment;
+- the sections answer every part of the question;
+- the reviewer note doesn't ask for a check.
 
-| Path | What |
+Anything else goes to a person, most important first. Every probability is logged, so thresholds can be re-tuned against the answer key **without new API calls**.
+
+**Human review and learning:**
+- The questionnaire graph runs on a **SQLite checkpointer**. A reviewer can stop half-way and resume later, and nothing is answered or paid for twice.
+- Approved and edited answers enter the **answer library** together with the policy section versions they rest on. A later question that asks for the same information reuses the approved answer.
+- Two exceptions: commitments always go back to a person, and an answer whose policy section has since changed version is never reused.
+
+## What the experiments showed
+
+1. **Cheap models were as safe as Opus.** Across all 60 questions, swapping Opus for Haiku + Sonnet or for the Jev hybrid kept every safety check. The real problem was over-caution: answerable questions sent to review.
+2. **Probabilities make a system tunable.** Pipeline B's misses came from Haiku's word-based verdicts, which only a prompt rewrite and a paid re-run can change. Pipeline C's came from thresholds on saved probabilities. Re-scoring the run offline predicted **50/60 correct and 36/41 auto-approved**, and the next real run matched exactly.
+3. **Decision models read literally.** Jev judged *"Globex is the data controller"* to contradict *"the customer is the data controller"*. Writing answers about "the customer" fixed that, and also made them reusable across prospects.
+4. **Every safety layer has a precision cost.** The reviewer-note check first held back 7 answerable questions. The notes Jev scored highest (0.71–0.95) were the useful ones, and those that stayed auto-approved scored 0.10–0.39. So the hold line moved from 0.4 to 0.7, and the drafting prompt was tightened. The next run recovered 4 auto-approvals.
+5. **Separation beats cleverness.** Restricted questions scored 0.83–0.96 on Jev's commitment checks, and every other question 0.38 or less, apart from one borderline wording at 0.62. The keyword rule still backs Jev up.
+
+## Try it
+
+**Streamlit app** (`app/streamlit_app.py`):
+- **Demo mode** is free: explore the saved runs, the scorecard, claim checks and Jev's gate, a review queue, and the policy pack.
+- **Live mode** is password-protected: upload a questionnaire, answer it with Claude and Jev, review it, and download the completed XLSX, the audit trail and the library.
+
+**Google Colab notebooks:**
+
+| Notebook | What it shows |
 |---|---|
-| `data/policies/` | Acme's policy pack: 10 short docs (InfoSec, AI governance, model card, retention, sub-processors, incident response, hosting, SSO/SCIM, privacy, BCP). Every section has a citable ID like `AIG-3`. **Gaps are deliberate.** |
-| `data/questionnaires/` | Globex's 60-question due-diligence questionnaire. Three tabs with three different layouts, merged headers, sub-questions, blank rows, a hidden column, dropdowns, an off-topic question and a duplicate. The AI tab maps questions to NIST AI RMF, ISO/IEC 42001 and the EU AI Act. |
-| `data/evals/golden_set.csv` | Answer key: expected specialist, outcome and source sections for every question (41 high, 6 medium, 2 partial, 5 restricted, 6 gap). |
-| `data/evals/policy_coverage.md` | What the pack covers explicitly, only implies, restricts or deliberately leaves out. |
-| `scripts/build_sample_questionnaire.py` | Regenerates the questionnaire and answer key. |
+| [`review_and_library.ipynb`](notebooks/review_and_library.ipynb) | The full workflow: answer, review with pause and resume, library reuse |
+| [`evals.ipynb`](notebooks/evals.ipynb) | Scorecard on the held-out questions, with an LLM judge for faithfulness |
+| [`cost_comparison.ipynb`](notebooks/cost_comparison.ipynb) | The A/B/C experiment, with measured costs |
+| [`demo.ipynb`](notebooks/demo.ipynb) | Phases 1–2: the original Opus pipeline, step by step |
 
-## Results: first full run (run 1)
+**Locally:**
+```bash
+pip install -e ".[app,dev]"
+pytest                                    # offline tests with stand-in models: no API keys needed
+export ANTHROPIC_API_KEY=... TYPESAFE_API_KEY=...
+python evals/run_evals.py --set heldout   # about $0.20
+streamlit run app/streamlit_app.py
+```
 
-All 60 Globex questions, Claude Opus 5.5 specialists and grounding, Claude Haiku 5.5 classifier. Full trail in [`results/run1_audit.csv`](results/run1_audit.csv).
+**Deploying the app on Streamlit Community Cloud:**
+1. Choose *New app*, then this repo, branch `main`, file `app/streamlit_app.py`.
+2. Under *Advanced settings → Secrets*, add:
+   ```toml
+   ANTHROPIC_API_KEY = "..."
+   TYPESAFE_API_KEY = "..."
+   APP_PASSWORD = "..."
+   ```
 
-| Check | Result |
-|---|---|
-| Trap questions escalated (PCI DSS, bug bounty, cyber insurance, escrow, model version, ESG) | **6 / 6** |
-| Restricted questions kept from auto-approve (guarantees, indemnity, liability, full pen-test report, 24h commitment) | **5 / 5** |
-| Implied / partial questions sent to a human | **8 / 8** |
-| Routed to the expected specialist | **100%** |
-| Cited the expected policy section | **100%** |
-| Clearly answerable questions auto-approved | 27 / 41 |
-| Claims checked | 251 (223 explicit, 21 inferred, 7 unsupported) |
+Demo mode works without any secrets.
 
-**No unsafe outcomes.** No trap or restricted question was auto-approved. Every miss was over-caution: answerable questions sent to review. The audit trail showed three causes:
+## Repository
 
-1. **The classifier over-flagged commitments.** It treated "what is your breach-notification timeframe?" as a request for a new promise. The keyword rule already catches real commitment requests, so the classifier definition can be stricter.
-2. **The answers over-answered.** Drafts added related facts nobody asked for, and each extra claim is another chance to be marked inferred.
-3. **The grounding check was too literal.** It marked a bare "Yes." or a faithful rewording as inferred.
+```
+src/responder/        the package
+  config.py           models, prices, thresholds (tuned values as defaults)
+  retrieval.py        policy pack → labelled sections → SQLite FTS5 (BM25)
+  agents.py           Claude + Jev clients, prompts, Jev questions, cost tracking, rule checks
+  graph.py            per-question graph, questionnaire graph with interrupt() review, dropdown fill
+  library.py          answer library with stale-policy detection
+  io.py               messy XLSX/CSV in, completed XLSX + audit trail out
+  evals.py            eval metrics, LLM judge, scorecards
+  state.py            graph state and structured-output schemas
+app/streamlit_app.py  demo + live front end
+evals/run_evals.py    command-line eval runner
+tests/                offline tests with stand-in Claude and Jev (run in CI)
+data/policies/        Acme SaaS policy pack: 10 docs, 67 citable sections, deliberate gaps
+data/questionnaires/  Globex's 60-question questionnaire: 3 differently laid-out tabs
+data/evals/           answer keys: golden_set.csv (60), heldout_set.csv (26), coverage map
+results/              audit trail and measured cost of every run
+docs/                 results log, demo GIF
+notebooks/            Colab notebooks (self-contained, kept as the record of each phase)
+```
 
-It also caught a genuine gap the answer key had missed. *"Is our data used to improve your products or train AI?"*: the policy rules out AI training but says nothing about product improvement. The answer key has been corrected.
+## Limitations
 
-## Results: prompt fixes (run 2)
-
-Three prompt changes, all now in the notebook:
-- a stricter definition of a "commitment request" for the classifier;
-- drafting that answers only what was asked;
-- grounding verdicts judged on meaning rather than wording, with the verbatim-quote check still enforced in code.
-
-To save cost, run 2 re-ran only **21 questions**: the 14 answerable questions run 1 sent to review, the corrected 3.12, and 6 safety checks (traps, restricted and implied-only questions). Trail in [`results/run2_fixes_audit.csv`](results/run2_fixes_audit.csv).
-
-| On these 21 questions | Run 1 | Run 2 |
-|---|---|---|
-| Correct outcome | 7 / 21 | **14 / 21** |
-| Answerable questions wrongly sent to review | 14 | **7** |
-| Safety checks still held (traps escalated, restricted and implied-only kept from auto-approve) | 6 / 6 | **6 / 6** |
-| Average claims per answer | 5.0 | **3.2** |
-| Average answer length | 56 words | **40 words** |
-
-**Half the misses recovered, with no loss of safety.**
-- **Fixes that worked:** breach-notification timeframe and sub-processor notice are no longer treated as commitments, and answers are shorter and stick to the question.
-- **Still sent to review (7):**
-  - *Over-answering persists in places.* For example, the NIST answer still adds the AI Governance Group.
-  - *Connecting phrases get marked inferred*, such as "because of these limitations".
-  - *The classifier still reads "Will you provide a certificate of deletion?"* as a commitment.
-  - *Two are arguably right to go to review.* "Independent" SOC 2 audit and "includes production access" are not literally stated in the policy.
-
-**Projected over the full 60** (the other 39 weren't re-run): about 34 / 41 answerable questions auto-approved, an auto-answer rate of roughly 57% against 45% in run 1.
-
-## Results: three pipelines compared (run 3)
-
-The same 60 questions and the same answer key, run through `notebooks/cost_comparison.ipynb`:
-
-- **A:** Opus does everything (run 1).
-- **B:** Haiku classifies, searches and checks; Sonnet writes.
-- **C:** a hybrid. [Jev](https://docs.typesafe.ai), a *decision model* from TypeSafe AI, makes every yes/no and pick-one judgement with calibrated probabilities. Claude only writes (Sonnet) and extracts claims (Haiku). Code checks quotes and numbers.
-
-| | A: Opus | B: Claude tiered | **C: Jev hybrid** |
-|---|---|---|---|
-| Correct outcome | 46 / 60 | 46 / 60 | 45 / 60 |
-| Answerable questions auto-approved | 27 / 41 | 30 / 41 | **31 / 41** |
-| **Unsafe auto-approvals** | **0** | **0** | **0** |
-| Traps escalated / restricted held back | 6/6, 5/5 | 6/6, 5/5 | 6/6, 5/5 |
-| Cost per 60-question run | ≈ $2.20 (estimated) | $0.34 (measured) | **$0.16 (measured)** |
-| Wall-clock time | minutes | 107 s | **38 s** |
-
-Files: [`run3_B_full_audit.csv`](results/run3_B_full_audit.csv), [`run3_C_full_audit.csv`](results/run3_C_full_audit.csv), plus measured token usage in the matching `_cost.json` files. A ran before the run 2 prompt fixes; B and C include them.
-
-**What the comparison shows**
-
-- **Safety holds at a fraction of the cost.** Both cheaper pipelines escalated every trap and held back every restricted question. C did slightly more useful work than A for about 7% of the cost.
-- **Why C is cheapest.**
-  - Jev's relevance gate passes Sonnet only the sections that matter, usually one. In total, B's Sonnet read about 2.3× more input than C's.
-  - Questions where no section passes are escalated with no Claude call at all: 15 of 60 in C.
-  - Jev's 551 requests cost about a third of a cent in total.
-- **The strongest argument for the hybrid is tunability, not price.**
-  - B's misses come from Haiku's word-based verdicts (17 "inferred" claims, two over-flagged commitments). Changing that means rewriting prompts and paying for another run.
-  - C's misses come mostly from **thresholds on saved probabilities**, which can be re-scored for free. Jev rated every restricted question 0.83–0.96 for asking a commitment, and every other question 0.38 or lower, apart from one borderline wording at 0.62.
-  - Moving two thresholds ("uncertain" from 0.3 to 0.4; completeness from 0.7 to 0.6) re-scores the same run to **50 / 60 correct, 36 / 41 auto-approved, still 0 unsafe**, with no new API calls. *Caveat: those thresholds were tuned on the same 60 questions, so a held-out set is needed to confirm them (Phase 4).*
-- **What thresholds can't fix in C.**
-  - The relevance gate is too strict on two-part questions ("SAML **and** SCIM?"), because each section answers only half.
-  - Five implied-only questions were escalated without a draft. That's safe, but less helpful.
-  - One answer lost its citation in Haiku's claim extraction.
-
-## Results: tuned Jev hybrid (run 4)
-
-Pipeline C re-run on all 60 questions with three changes:
-- the tuned thresholds;
-- a gate question that accepts passages answering *part* of a question;
-- a fallback for claims Haiku returns without a source.
-
-Trail in [`run4_C_tuned_audit.csv`](results/run4_C_tuned_audit.csv).
-
-| | A: Opus | C: Jev hybrid (run 3) | **C: tuned (run 4)** |
-|---|---|---|---|
-| Correct outcome | 46 / 60 | 45 / 60 | **50 / 60** |
-| Answerable questions auto-approved | 27 / 41 | 31 / 41 | **36 / 41** |
-| Unsafe auto-approvals | 0 | 0 | **0** |
-| Cost per run | ≈ $2.20 (est.) | $0.16 | **$0.17** |
-| Time | minutes | 38 s | **33 s** |
-
-**The re-scored prediction held exactly:** 50 / 60 and 36 / 41, confirmed by a real run with zero unsafe outcomes. Against the Opus baseline, that's 9 more answers ready to send without human review, at about 8% of the cost.
-
-**What's left (10 questions, all routed to a human, so none unsafe):**
-- **Five implied-only questions are escalated rather than drafted.** BYOK, external red-teaming, bias testing, watermarking and language support: the policy only hints at an answer, and Sonnet declined to draft one.
-- **Jev's literal reading (a known limitation in TypeSafe's docs).** Drafts that named the prospect ("Globex is the data controller") were judged to **contradict** a policy that says "the customer is the data controller". This caused 2 of the 10 misses. Planned fix: answers should say "the customer", never the prospect's name. That also makes approved answers reusable across prospects in the Phase 3 answer library.
-- **Two-part questions on the relevance line.** For "SAML **and** SCIM?", the evidence check now passes (0.92), but the SSO section scored 0.41 on relevance, against a 0.45 floor.
-- **One borderline commitment wording.** "Will you provide a certificate of deletion?" scored 0.61, so it was held for review.
-
-*Caveat: the thresholds were tuned on these same 60 questions. A held-out question set (Phase 4) is needed to confirm they generalise.*
-
-## Phase 3: human review and the answer library
-
-`notebooks/review_and_library.ipynb` builds on the Jev hybrid and adds the two things a real team needs:
-
-- **Review inside the graph.** One LangGraph graph answers every question in parallel (`Send`), then pauses on each one that needs a human, using `interrupt()`. Restricted questions come first, then escalations, Low and Medium. The reviewer can **approve**, **edit** or **reject**, and every decision is recorded with their name, the time and an optional comment.
-  - A **SQLite checkpointer** saves the graph after every decision. The reviewer can stop half-way and resume later, even from a fresh graph object, and nothing is answered or paid for twice.
-  - The `review` node only *collects* decisions. LangGraph replays them on each resume, so every write happens once, in `finalise`.
-- **An answer library that learns from reviewers.** Approved and edited answers are stored with their policy sections **and those sections' versions**. On the next questionnaire, each question is checked against the library first:
-  1. full-text search finds the closest approved questions;
-  2. any answer whose policy section has changed version since approval is discarded as stale;
-  3. Jev judges whether the new question asks for *the same information*.
-
-  A hit reuses the approved answer with **no Claude call**. Commitment questions are the exception: their reused answer becomes a draft for a human, because commitments always get a fresh look.
-- **Two drafting changes from run 4.**
-  - Answers say "the customer", never the prospect's name. That keeps them reusable, and fixes Jev's literal-reading misses.
-  - Caveats go in a separate **reviewer note**, never in customer-facing text.
-- **Outputs:**
-  - the prospect's questionnaire with the *final* answers;
-  - an audit CSV with draft vs final answer, decision, reviewer, time and evidence;
-  - the library itself (`answer_library.db`), to re-upload next time.
-
-**First live run (smoke, 10 questions; [`run5_review_smoke_audit.csv`](results/run5_review_smoke_audit.csv)):**
-- 4 answers were auto-approved and 6 went to review. The reviewer rejected all 6 to test the flow, and each rejection was recorded with name and time.
-- No draft named the prospect.
-- Caveats stayed in reviewer notes, never in the answer.
-
-One gap it exposed: two *auto-approved* answers carried reviewer notes that no human would see. For example: *"confirm the certificate is in date before sending."* Notes on auto-approved answers need to reach a person. **Fixed:** a new `note_check` step asks Jev whether the note says something must be checked before sending. If so, the answer is held for a human. Purely informational notes, like *"SUB-3 doesn't say what happens after an objection"*, don't hold anything up.
-
-*Earlier offline testing covered a review paused and resumed, a second run reusing approved answers with zero Claude calls for them, a restricted reuse routed to a human, and a stale answer refused after its policy version changed.*
-
-**Note check confirmed live (second smoke run):** the ISO 27001 answer, auto-approved before, now goes to review with *"reviewer note asks for a check before sending (p=0.95)"*. The sub-processor answer, whose note is only informational, stays auto-approved. One effect to measure on a full run: the drafter writes cautious notes often, so the auto-approval rate may drop.
-
-**Full run with review (run 6; [`run6_full_review_audit.csv`](results/run6_full_review_audit.csv)):**
-- All 60 questions, then 31 reviewed. One answer was approved and one edited, and both went into the library. The other 29 were rejected as a test.
-- 0 unsafe auto-approvals, and no draft named the prospect.
-- The "customer" wording fixed both run-4 contradictions caused by Jev's literal reading.
-- **But auto-approvals fell from 36 to 29 of 41.** The note check alone held back 7 answerable questions. Sonnet wrote a note on nearly every answer, and the hold line (0.4) was too low.
-  - Notes on answers that stayed auto-approved scored 0.10–0.39.
-  - The 7 held scored 0.45–0.95. The highest were the genuinely useful ones: *"confirm the certificate is current"* (0.71), and *"the policy doesn't say when the 15-minute clock starts"* (0.95).
-  - Raising the hold line to 0.7 would have released the 3 informational notes, re-scoring to 32 / 41 with no new API calls. The drafting prompt now also asks for a note only when the reviewer should act on something.
-  - That's the precision/recall trade-off of an extra safety layer, and the saved probabilities make it measurable.
-
-**Library reuse and the tightened note check (run 7; [`run7_library_reuse_audit.csv`](results/run7_library_reuse_audit.csv)):**
-
-| | Run 6 | **Run 7** |
-|---|---|---|
-| Correct outcome | 43 / 60 | **47 / 60** |
-| Answerable questions auto-approved | 29 / 41 | **33 / 41** |
-| Unsafe auto-approvals | 0 | **0** |
-| Drafts carrying a reviewer note | almost all | **16 of 44** |
-| Answers reused from the library | 0 | **2** |
-| Cost | $0.23 | **$0.20** |
-
-- **The library reused answers live.**
-  - ISO 27001, approved by the reviewer in run 6, matched with Jev same-question p=0.99. It was auto-approved with no Claude call and no review.
-  - The 24-hour commitment, edited in run 6, matched at p=0.98. Because it's a commitment, it came back to the reviewer as a draft rather than going out. Re-approving it didn't create a duplicate entry.
-- **The tightened note check held only notes that matter**, e.g. *"The policy is ambiguous on whether the 30-day production deletion window starts at termination or at the end of the 30-day export period"* (p=0.95). It no longer held routine commentary.
-- *Tested offline only:* refusing a stale library answer when its policy section changes version.
-
-**Phase 3 is complete.** Next is Phase 4: a Streamlit review screen, held-out evals, the `src/` package, and filling in Yes/No dropdown columns.
-
-## Quick start (Google Colab)
-
-1. Open `notebooks/demo.ipynb` in Colab.
-2. Add `ANTHROPIC_API_KEY` in Colab Secrets.
-3. Zip the `data/` folder and upload it when section 2 asks.
-4. Sections 1–12 answer single questions. Sections 13–18 upload a questionnaire, answer it in parallel, download the completed XLSX and audit CSV, and score the run against the answer key.
-
-A full 60-question run makes about 300 model calls.
-
-`notebooks/cost_comparison.ipynb` runs the same questionnaire through two cheaper pipelines, picked with `PIPELINE`:
-- **B:** Haiku + Sonnet.
-- **C:** a hybrid using the Jev decision model for every yes/no and pick-one judgement. It needs `TYPESAFE_API_KEY` as well.
-
-The notebook measures real token costs, and its last section builds an A / B / C scorecard against the answer key.
-
-`notebooks/review_and_library.ipynb` is the Phase 3 workflow:
-1. Set `REVIEWER` and `RUN_ID`.
-2. Answer the questionnaire (section 9) and review in section 10. Type `q` to pause; re-run the cell to resume.
-3. Download the final XLSX, the audit trail and `answer_library.db`.
-4. Upload the library again next session (section 6), so approved answers are reused.
+- **One policy pack, one questionnaire family.** The held-out set tests generalisation within Acme's policies, not to another company's documents.
+- **Thresholds were tuned on 60 questions.** The held-out run checks them, but real calibration needs far more volume.
+- **Implied-only questions are escalated rather than drafted.** It's safe, but the reviewer starts from a blank answer.
+- **Two-part questions** can fall just under the relevance line when each section answers only half.
+- **The stale-policy check is tested offline only.** It needs a real policy change to see live.
+- **The early notebooks duplicate code.** The package is now the source of truth, and the notebooks are kept as a record of each phase.
 
 ## Stack
 
-LangGraph (state graph, `Send` fan-out) · langchain-anthropic · Claude Opus 5.5 (specialists, grounding) · Claude Haiku 5.5 (routing) · SQLite FTS5 with BM25 ranking and Porter stemming · openpyxl · pandas
-
-## Roadmap
-
-- **Phase 3 (done):** `interrupt()` + checkpointer for approve / edit / reject; an approved-answer library checked first, with stale-policy detection; reviewer notes kept out of customer text, with Jev deciding which notes need a human.
-- **Phase 4:** package the code into `src/responder/`, a Streamlit review UI, auto-fill for Yes/No dropdown columns (a natural Jev pick-one question), an eval runner (routing, citation coverage, LLM-judge faithfulness, auto-answer rate, escalation correctness, calibration of High), and thresholds calibrated against the golden set.
+LangGraph (`Send` fan-out, `interrupt()`, SQLite checkpointer) · Claude Sonnet 5.5 and Haiku 5.5 via langchain-anthropic · Jev (TypeSafe AI) via `typesafe-sdk` · SQLite FTS5 · openpyxl · pandas · Streamlit · pytest + GitHub Actions

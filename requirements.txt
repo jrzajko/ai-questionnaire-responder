@@ -1,4 +1,7 @@
+streamlit
 langgraph
+langgraph-checkpoint-sqlite
 langchain-anthropic
+typesafe-sdk
 openpyxl
 pandas
