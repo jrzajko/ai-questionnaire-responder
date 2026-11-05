@@ -13,7 +13,7 @@ B2B SaaS vendors receive long questionnaires from prospects ("Do you encrypt dat
 | 1 | Policy pack, FTS5 retrieval, one question end to end with citations + confidence | ✅ Done |
 | 2 | Whole questionnaire in parallel (LangGraph `Send`), messy XLSX/CSV in, completed XLSX + audit trail out | ✅ Done, two runs below |
 | 2b | Cost: tiered Claude models vs a hybrid with a decision model | ✅ Done: Jev hybrid confirmed at 36/41 auto-approved, 0 unsafe, $0.17 per run |
-| 3 | Human review with `interrupt()` + checkpointer, approved-answer library (learning loop) | Planned |
+| 3 | Human review with `interrupt()` + checkpointer, approved-answer library (learning loop) | ✅ Built and tested offline; live run pending |
 | 4 | Streamlit UI, full evals, calibrated thresholds | Planned |
 
 ## How it works
@@ -164,7 +164,30 @@ Trail in [`run4_C_tuned_audit.csv`](results/run4_C_tuned_audit.csv).
 
 *Caveat: the thresholds were tuned on these same 60 questions. A held-out question set (Phase 4) is needed to confirm they generalise.*
 
-**Next:** Phase 3 (human review with `interrupt()`, and the approved-answer library).
+## Phase 3: human review and the answer library
+
+`notebooks/review_and_library.ipynb` builds on the Jev hybrid and adds the two things a real team needs:
+
+- **Review inside the graph.** One LangGraph graph answers every question in parallel (`Send`), then pauses on each one that needs a human, using `interrupt()`. Restricted questions come first, then escalations, Low and Medium. The reviewer can **approve**, **edit** or **reject**, and every decision is recorded with their name, the time and an optional comment.
+  - A **SQLite checkpointer** saves the graph after every decision. The reviewer can stop half-way and resume later, even from a fresh graph object, and nothing is answered or paid for twice.
+  - The `review` node only *collects* decisions. LangGraph replays them on each resume, so every write happens once, in `finalise`.
+- **An answer library that learns from reviewers.** Approved and edited answers are stored with their policy sections **and those sections' versions**. On the next questionnaire, each question is checked against the library first:
+  1. full-text search finds the closest approved questions;
+  2. any answer whose policy section has changed version since approval is discarded as stale;
+  3. Jev judges whether the new question asks for *the same information*.
+
+  A hit reuses the approved answer with **no Claude call**. Commitment questions are the exception: their reused answer becomes a draft for a human, because commitments always get a fresh look.
+- **Two drafting changes from run 4.**
+  - Answers say "the customer", never the prospect's name. That keeps them reusable, and fixes Jev's literal-reading misses.
+  - Caveats go in a separate **reviewer note**, never in customer-facing text.
+- **Outputs:**
+  - the prospect's questionnaire with the *final* answers;
+  - an audit CSV with draft vs final answer, decision, reviewer, time and evidence;
+  - the library itself (`answer_library.db`), to re-upload next time.
+
+*Status: tested offline end to end with stand-in models. That covered a review paused and resumed, a second run reusing approved answers with zero Claude calls for them, a restricted reuse routed to a human, and a stale answer refused after its policy version changed. A live run is next.*
+
+**Next:** a live Phase 3 run, then Phase 4 (Streamlit review UI, held-out evals, `src/` package).
 
 ## Quick start (Google Colab)
 
@@ -180,6 +203,12 @@ A full 60-question run makes about 300 model calls.
 - **C:** a hybrid using the Jev decision model for every yes/no and pick-one judgement. It needs `TYPESAFE_API_KEY` as well.
 
 The notebook measures real token costs, and its last section builds an A / B / C scorecard against the answer key.
+
+`notebooks/review_and_library.ipynb` is the Phase 3 workflow:
+1. Set `REVIEWER` and `RUN_ID`.
+2. Answer the questionnaire (section 9) and review in section 10. Type `q` to pause; re-run the cell to resume.
+3. Download the final XLSX, the audit trail and `answer_library.db`.
+4. Upload the library again next session (section 6), so approved answers are reused.
 
 ## Stack
 
