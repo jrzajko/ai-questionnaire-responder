@@ -1,0 +1,27 @@
+sheet,ref,question,expected_category,expected_outcome,expected_sources,note
+heldout,H01,How often do employees complete security awareness training?,security,high,ISP-4,
+heldout,H02,Are background checks carried out on new hires before they start?,security,high,ISP-4,
+heldout,H03,How long do you retain security and application logs?,security,high,ISP-9;DR-5,two sections state 12 months
+heldout,H04,Are company laptops encrypted and protected by endpoint detection and response software?,security,high,ISP-10,
+heldout,H05,Do you run static application security testing as part of your build pipeline?,security,high,ISP-8,
+heldout,H06,"How often are production databases backed up, and where are the backups kept?",privacy|security,high,DR-3,
+heldout,H07,What is your target monthly availability for the platform?,security,high,HA-5,"""target"" phrasing; no commitment asked"
+heldout,H08,"Is the platform single-tenant or multi-tenant, and how is each customer's data kept separate?",security,high,HA-3,
+heldout,H09,Which user roles are available for managing permissions within the platform?,security,high,IAM-4,
+heldout,H10,Who must approve a change of AI model provider?,ai_governance,high,AIG-7,
+heldout,H11,How are sub-processors assessed before you start using them?,privacy,high,SUB-2,
+heldout,H12,Do you maintain records of processing activities under Article 30 of the UK GDPR?,privacy,high,PRV-6,
+heldout,H13,Is AI-generated content labelled so that users know it was produced by AI?,ai_governance,high,AIG-6,
+heldout,H14,Do AI-generated answers include links back to the source documents they were based on?,ai_governance,high,MC-1;MC-7,
+heldout,H15,Can we choose to have all of our data stored only within the EU?,security|privacy,medium,HA-1;HA-2,"implied no: primary storage is UK, no other regions offered"
+heldout,H16,Do you penetration test your AI features specifically?,ai_governance|security,medium,ISP-7;AIG-10,annual app pen test + internal adversarial AI testing; AI-specific external test not stated
+heldout,H17,"When SSO is enforced for our tenant, can users still sign in with a password?",security,medium,IAM-1;IAM-3,implied by SSO enforcement; not stated
+heldout,H18,"What is your recovery time objective, and do you keep a hot standby with a second cloud provider?",security,partial,BCP-1,RTO covered; second cloud provider not covered
+heldout,H19,What is the name of your Data Protection Officer?,privacy,partial,PRV-3,DPO exists and email given; name not stated
+heldout,H20,Will you guarantee that our data never leaves the United Kingdom?,privacy|security,restricted,HA-2,guarantee; backups are in the EU
+heldout,H21,Will you agree to service credits if availability falls below 99.9% in a month?,security,restricted,HA-5,SLA credits
+heldout,H22,Please send us a copy of your latest SOC 2 Type II report.,security,restricted,ISP-3,confidential report; only under NDA; no 'full report' keyword
+heldout,H23,Do you hold Cyber Essentials Plus certification?,security,gap,,trap: not in pack
+heldout,H24,Can we restrict access to our tenant with an IP allow-list?,security,gap,,trap: not in pack
+heldout,H25,Does the platform meet WCAG 2.1 AA accessibility standards?,security,gap,,trap: off-topic and not in pack
+heldout,H26,What is the maximum file size users can upload?,security,gap,,trap: product detail not in pack
