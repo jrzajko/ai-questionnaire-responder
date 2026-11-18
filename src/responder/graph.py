@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import time
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -21,6 +20,7 @@ from .config import ESCALATE_TEXT, Settings
 from .library import AnswerLibrary
 from .retrieval import PolicyIndex, format_hits
 from .state import ClaimList, DraftAnswer, QState, RunState
+from .tracing import ContextThreadPoolExecutor, current_run_ids, log_decision, traceable
 
 ICONS = {"auto_approve": "🟢", "human_review": "🟡", "escalate": "🔴", "error": "⚠️"}
 REVIEW_PRIORITY = {"restricted": 0, "escalate": 1, "error": 2, "Low": 3, "Medium": 4}
@@ -37,7 +37,7 @@ class Responder:
         self.claude = claude or ClaudeClient(self.usage, (self.s.draft_model, self.s.extract_model))
         self.jev = jev or JevClient(self.usage, self.s.jev_model)
         self.q = jev_questions()
-        self.pool = ThreadPoolExecutor(max_workers=self.s.jev_workers)
+        self.pool = ContextThreadPoolExecutor(max_workers=self.s.jev_workers)   # keeps Jev calls inside the question's trace
         self.graph = self._build_question_graph()
 
     # ------------------------------------------------------------------ nodes
@@ -244,10 +244,16 @@ class Responder:
         def fan_out(state: RunState):
             return [Send("answer_one", item) for item in state["items"]]
 
+        @traceable(name="answer_question", run_type="chain")
+        def traced_answer(question: str) -> dict:
+            return {**self.answer(question), **current_run_ids()}     # IDs let reviewer feedback find this trace
+
         def answer_one(item: dict) -> dict:
             t0 = time.time()
             try:
-                r = self.answer(item["model_question"])
+                r = traced_answer(item["model_question"], langsmith_extra={
+                    "metadata": {"run_id": run_id, "sheet": item["sheet"], "ref": item["ref"]},
+                    "tags": [f"ref:{item['ref']}"] + ([f"run:{run_id}"] if run_id else [])})
             except Exception as e:                                  # one failure must not stop the run
                 r = {"question": item["model_question"], "answer": "", "draft_answer": "", "sources": [],
                      "source_titles": [], "category": "", "confidence": "Low", "status": "error",
@@ -294,6 +300,8 @@ class Responder:
                 else:
                     f = {**r, "final_answer": "", "decision": "rejected", "reviewer": d.get("reviewer", reviewer),
                          "decided_at": d.get("at", ""), "review_comment": d.get("comment", "")}
+                if d is not None:
+                    log_decision(r, d)                                     # LangSmith feedback, if tracing is on
                 if from_library and self.library is not None:
                     self.library.bump(r["signals"]["library_id"])
                     reused += 1

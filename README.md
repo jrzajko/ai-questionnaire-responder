@@ -96,6 +96,13 @@ Anything else goes to a person, most important first. Every probability is logge
 - Approved and edited answers enter the **answer library** together with the policy section versions they rest on. A later question that asks for the same information reuses the approved answer.
 - Two exceptions: commitments always go back to a person, and an answer whose policy section has since changed version is never reused.
 
+**Observability (optional, [LangSmith](https://docs.smith.langchain.com)):** set `LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY` and every run is traced ([`tracing.py`](src/responder/tracing.py)).
+- **One trace per question,** tagged with its ref (e.g. `ref:1.4.2`), showing every step with its inputs, outputs, timing and tokens.
+- **Jev calls are visible too.** They go through TypeSafe's own SDK, which LangChain can't see, so a small wrapper records each one: the exact yes/no or pick-one question and the probabilities Jev returned.
+- **Reviewer decisions become feedback** on the question's trace: approve 1, edit 0.5 (with the edited answer as the correction), reject 0. That builds a record of where people disagreed with the pipeline.
+- **It complements the audit trail rather than replacing it.** The audit CSV is the record for the customer and for compliance; LangSmith is for debugging and improving the pipeline.
+- **Traces hold questionnaire content,** so in a real deployment LangSmith needs the same vendor review as the model providers, or `LANGSMITH_HIDE_INPUTS` / `LANGSMITH_HIDE_OUTPUTS`, or self-hosting. With tracing off (the default) nothing is sent.
+
 ## What the experiments showed
 
 1. **Cheap models were as safe as Opus.** Across all 60 questions, swapping Opus for Haiku + Sonnet or for the Jev hybrid kept every safety check. The real problem was over-caution: answerable questions sent to review.
@@ -135,6 +142,10 @@ streamlit run app/streamlit_app.py
    ANTHROPIC_API_KEY = "..."
    TYPESAFE_API_KEY = "..."
    APP_PASSWORD = "..."
+   # optional LangSmith tracing
+   LANGSMITH_TRACING = "true"
+   LANGSMITH_API_KEY = "..."
+   LANGSMITH_PROJECT = "ai-questionnaire-responder"
    ```
 
 Demo mode works without any secrets.
@@ -150,6 +161,7 @@ src/responder/        the package
   library.py          answer library with stale-policy detection
   io.py               messy XLSX/CSV in, completed XLSX + audit trail out
   evals.py            eval metrics, LLM judge, scorecards
+  tracing.py          optional LangSmith tracing: Jev calls, per-question traces, reviewer feedback
   state.py            graph state and structured-output schemas
 app/streamlit_app.py  demo + live front end
 evals/run_evals.py    command-line eval runner
@@ -173,4 +185,4 @@ notebooks/            Colab notebooks (self-contained, kept as the record of eac
 
 ## Stack
 
-LangGraph (`Send` fan-out, `interrupt()`, SQLite checkpointer) · Claude Sonnet 5.5 and Haiku 5.5 via langchain-anthropic · Jev (TypeSafe AI) via `typesafe-sdk` · SQLite FTS5 · openpyxl · pandas · Streamlit · pytest + GitHub Actions
+LangGraph (`Send` fan-out, `interrupt()`, SQLite checkpointer) · Claude Sonnet 5.5 and Haiku 5.5 via langchain-anthropic · Jev (TypeSafe AI) via `typesafe-sdk` · SQLite FTS5 · openpyxl · pandas · Streamlit · LangSmith (optional tracing) · pytest + GitHub Actions

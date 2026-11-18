@@ -4,6 +4,7 @@ Demo mode (default, free): explore saved runs, the scorecard, the policy pack an
 Live mode (password): upload a questionnaire, answer it with Jev + Claude, review with LangGraph interrupt().
 
 Streamlit Cloud secrets: ANTHROPIC_API_KEY, TYPESAFE_API_KEY, APP_PASSWORD.
+Optional LangSmith tracing: LANGSMITH_TRACING, LANGSMITH_API_KEY, LANGSMITH_PROJECT (and LANGSMITH_ENDPOINT for EU).
 """
 import json
 import os
@@ -289,7 +290,8 @@ def page_live():
             st.error("Wrong password.")
         st.info("Live mode calls Claude and Jev with the owner's API keys, so it's password-protected. Demo mode is free.")
         return
-    for k in ("ANTHROPIC_API_KEY", "TYPESAFE_API_KEY"):
+    for k in ("ANTHROPIC_API_KEY", "TYPESAFE_API_KEY", "LANGSMITH_TRACING", "LANGSMITH_API_KEY",
+              "LANGSMITH_PROJECT", "LANGSMITH_ENDPOINT"):
         if secret(k):
             os.environ[k] = secret(k)
 
@@ -323,16 +325,22 @@ def page_live():
         graph = responder.build_run_graph(SqliteSaver(sqlite3.connect(work / "checkpoints.db", check_same_thread=False)),
                                           reviewer=reviewer, run_id=thread)
         items = extract_questions(q_path)[0][:limit]
+        config = {"configurable": {"thread_id": thread}, "run_name": f"questionnaire {thread}",
+                  "tags": ["streamlit", f"run:{thread}"], "metadata": {"run_id": thread, "reviewer": reviewer}}
         with st.spinner(f"Answering {len(items)} questions in parallel..."):
             graph.invoke({"items": items, "results": [], "decisions": [], "final": [], "summary": {}},
-                         {"configurable": {"thread_id": thread}, "max_concurrency": 6})
-        ss.update(live_graph=graph, live_config={"configurable": {"thread_id": thread}}, live_responder=responder,
+                         {**config, "max_concurrency": 6})
+        ss.update(live_graph=graph, live_config=config, live_responder=responder,
                   live_qpath=str(q_path), live_lib=str(lib_path))
         st.rerun()
 
     graph = ss.get("live_graph")
     if not graph:
         return
+    from responder.tracing import enabled as tracing_on
+    if tracing_on():
+        st.caption(f"🔭 Traced in LangSmith: project `{os.environ.get('LANGSMITH_PROJECT', 'default')}`, "
+                   f"tag `run:{ss['live_config']['configurable']['thread_id']}`. Review decisions are sent as feedback.")
     config = ss.live_config
     pending = graph.get_state(config).interrupts
     st.caption(f"Cost so far: ${ss.live_responder.usage.cost:.4f}")

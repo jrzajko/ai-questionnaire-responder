@@ -170,3 +170,67 @@ def test_eval_runner_scores_both_sets(make_responder, tmp_path):
         md = write_outputs(results, m, tmp_path, key.stem).read_text()
         assert "Unsafe auto-approvals" in md
     assert len(load_eval_set(ROOT / "data/evals/golden_set.csv", GLOBEX)) == 60
+
+
+# ------------------------------------------------------------------ LangSmith tracing (recorded locally, no network)
+def RecordingLangSmith():
+    """Stands in for the LangSmith client: records runs and feedback instead of sending them."""
+    from langsmith import Client
+
+    class Recorder(Client):
+        def create_run(self, **kw):
+            self.rec_runs[str(kw["id"])] = dict(kw)
+
+        def update_run(self, run_id, **kw):
+            self.rec_runs.setdefault(str(run_id), {}).update({k: v for k, v in kw.items() if v is not None})
+
+        def create_feedback(self, run_id, key, **kw):
+            self.rec_feedback.append({"run_id": str(run_id), "key": key, **kw})
+
+    c = Recorder(api_key="test", api_url="http://127.0.0.1:9", auto_batch_tracing=False)
+    c.rec_runs, c.rec_feedback = {}, []
+    return c
+
+
+def test_tracing_nests_jev_and_logs_reviewer_feedback(make_responder, tmp_path, monkeypatch):
+    from langsmith.run_helpers import tracing_context
+    from responder import tracing
+    monkeypatch.setenv("LANGSMITH_TRACING", "true")
+    monkeypatch.setenv("LANGSMITH_API_KEY", "test")
+    ls = RecordingLangSmith()
+    monkeypatch.setattr(tracing, "_client", ls)
+    items = [i for i in extract_questions(GLOBEX)[0] if i["ref"] in {"1.1.1", "1.4.2"}]
+    with tracing_context(enabled=True, client=ls, project_name="test"):
+        values, seen = run_and_review(make_responder(), items, tmp_path, "run-t",
+                                      lambda p: decision("edit", "Tester", answer="Human answer.", comment="fixed"))
+    final = {f["ref"]: f for f in values["final"]}
+
+    # Each question has its own trace, tagged with its ref, and its Jev calls sit inside it, readable.
+    q_runs = {r["id"]: r for r in ls.rec_runs.values() if r.get("name") == "answer_question"}
+    assert {final[k]["trace_run_id"] for k in final} <= set(map(str, q_runs))
+    jev = [r for r in ls.rec_runs.values() if r.get("name") == "Jev"]
+    assert jev and all(r.get("parent_run_id") for r in jev)
+    trace_of = {str(r["id"]): str(r["trace_id"]) for r in ls.rec_runs.values() if r.get("trace_id")}
+    assert trace_of[final["1.4.2"]["trace_run_id"]] == final["1.4.2"]["trace_id"]
+    assert any(final["1.4.2"]["trace_id"] == str(r["trace_id"]) for r in jev)
+    classify = next(r for r in jev if "category" in r["inputs"]["questions"])
+    assert classify["inputs"]["questions"]["category"]["type"] == "choice"
+    out = next(r["outputs"] for r in ls.rec_runs.values() if r.get("name") == "Jev" and r.get("outputs")
+               and "category" in r["outputs"])
+    assert set(out["category"]) == {"choice", "confidence", "probabilities"}
+
+    # The reviewer's edit becomes feedback on that question's trace, with the correction attached.
+    assert seen == ["1.4.2"] and len(ls.rec_feedback) == 1
+    fb = ls.rec_feedback[0]
+    assert fb["run_id"] == final["1.4.2"]["trace_run_id"] and fb["key"] == "reviewer_decision"
+    assert fb["score"] == 0.5 and fb["value"] == "edit" and fb["correction"] == {"answer": "Human answer."}
+
+
+def test_tracing_off_adds_nothing(make_responder, tmp_path, monkeypatch):
+    from responder import tracing
+    monkeypatch.delenv("LANGSMITH_TRACING", raising=False)
+    monkeypatch.delenv("LANGCHAIN_TRACING_V2", raising=False)
+    items = [i for i in extract_questions(GLOBEX)[0] if i["ref"] == "1.4.2"]
+    values, _ = run_and_review(make_responder(), items, tmp_path, "run-off", lambda p: decision("reject", "Tester"))
+    assert "trace_run_id" not in values["final"][0]
+    assert tracing.log_decision(values["final"][0], decision("reject", "Tester")) is False

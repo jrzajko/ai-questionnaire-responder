@@ -6,6 +6,7 @@ import threading
 from collections import defaultdict
 
 from .config import PRICES
+from .tracing import enabled, get_current_run_tree, jev_inputs, jev_outputs, traceable
 
 # --------------------------------------------------------------------------- cost tracking
 
@@ -68,9 +69,14 @@ class JevClient:
             client = TypeSafeClient(model=model)       # reads TYPESAFE_API_KEY; retries 429s and timeouts
         self.client, self.model, self.usage = client, model, usage
 
+    @traceable(name="Jev", run_type="tool", process_inputs=jev_inputs, process_outputs=jev_outputs)
     def ask(self, state, questions: dict) -> dict:
         r = self.client.system_one(state=state, questions=questions, model=self.model)
         self.usage.add("jev", r.usage.input_tokens, r.usage.output_tokens)
+        rt = get_current_run_tree() if enabled() else None
+        if rt is not None:                                  # LangSmith can't price Jev, so record its tokens
+            rt.add_metadata({"jev_model": self.model, "input_tokens": r.usage.input_tokens,
+                             "output_tokens": r.usage.output_tokens})
         return r.answers
 
 
