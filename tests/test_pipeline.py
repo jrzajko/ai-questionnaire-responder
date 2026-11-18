@@ -259,3 +259,16 @@ def test_sidestepped_yes_no_answer_goes_to_review(make_responder):
     assert "yes/no question not answered with Yes or No" in r["reasons"] and r["signals"]["direct_answer"] is False
     state["draft"]["answer"] = "Yes. Every AI feature undergoes internal adversarial testing."
     assert resp.score(state)["result"]["status"] == "auto_approve"
+
+
+def test_eval_traces_are_tagged_by_ref_and_outcome(make_responder, monkeypatch):
+    from langsmith.run_helpers import tracing_context
+    from responder.evals import load_eval_set, run_eval
+    monkeypatch.setenv("LANGSMITH_TRACING", "true")
+    monkeypatch.setenv("LANGSMITH_API_KEY", "test")
+    ls = RecordingLangSmith()
+    rows = [r for r in load_eval_set(ROOT / "data/evals/heldout_set.csv") if r["ref"] in ("H01", "H23")]
+    with tracing_context(enabled=True, client=ls, project_name="test"):
+        run_eval(make_responder(), rows, judge_model=None)
+    tags = {r["name"]: set(r.get("tags") or []) for r in ls.rec_runs.values() if str(r.get("name", "")).startswith("eval ")}
+    assert tags == {"eval H01": {"ref:H01", "expected:high", "correct"}, "eval H23": {"ref:H23", "expected:gap", "correct"}}

@@ -4,7 +4,6 @@ from __future__ import annotations
 import csv
 import pathlib
 import time
-from concurrent.futures import ThreadPoolExecutor
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -12,6 +11,7 @@ from .agents import JUDGE_PROMPT
 from .config import OPUS
 from .io import extract_questions
 from .state import JudgeVerdict
+from .tracing import ContextThreadPoolExecutor, enabled, get_current_run_tree, traceable
 
 # What each kind of question in the answer key should lead to.
 EXPECT = {"high": {"auto_approve"}, "medium": {"human_review"}, "gap": {"escalate"},
@@ -47,6 +47,21 @@ def run_eval(responder, rows: list[dict], judge_model: str | None = OPUS, max_pa
     t0 = time.time()
 
     def one(row):
+        return traced_one(row, langsmith_extra={
+            "name": f"eval {row['ref']}", "metadata": {"ref": row["ref"], "expected_outcome": row["expected_outcome"]},
+            "tags": [f"ref:{row['ref']}", f"expected:{row['expected_outcome']}"]})
+
+    @traceable(run_type="chain")
+    def traced_one(row):
+        out = answer_and_judge(row)
+        rt = get_current_run_tree() if enabled() else None
+        if rt is not None:                     # tag the trace so wrong and unsafe answers can be filtered in LangSmith
+            ok = out["status"] in EXPECT[row["expected_outcome"]]
+            unsafe = out["status"] == "auto_approve" and row["expected_outcome"] != "high"
+            rt.add_tags(["correct" if ok else "wrong"] + (["unsafe"] if unsafe else []))
+        return out
+
+    def answer_and_judge(row):
         try:
             r = responder.answer(row["model_question"])
         except Exception as e:
@@ -59,7 +74,7 @@ def run_eval(responder, rows: list[dict], judge_model: str | None = OPUS, max_pa
             out["faithful"], out["unsupported"] = v["faithful"], v["unsupported"]
         return out
 
-    with ThreadPoolExecutor(max_workers=max_parallel) as pool:
+    with ContextThreadPoolExecutor(max_workers=max_parallel) as pool:
         results = list(pool.map(one, rows))
     return results, metrics(results, responder.usage.cost, round(time.time() - t0))
 

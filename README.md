@@ -105,6 +105,7 @@ Anything else goes to a person, most important first. Every probability is logge
 
 **Observability (optional, [LangSmith](https://docs.smith.langchain.com)):** set `LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY` and every run is traced ([`tracing.py`](src/responder/tracing.py)).
 - **One trace per question,** tagged with its ref (e.g. `ref:1.4.2`), showing every step with its inputs, outputs, timing and tokens.
+- **Eval runs are tagged with the outcome** as well: `correct`, `wrong`, and `unsafe` for an auto-approval the answer key says a person should have seen, so the misses can be filtered and opened directly.
 - **Jev calls are visible too.** They go through TypeSafe's own SDK, which LangChain can't see, so a small wrapper records each one: the exact yes/no or pick-one question and the probabilities Jev returned.
 - **Reviewer decisions become feedback** on the question's trace: approve 1, edit 0.5 (with the edited answer as the correction), reject 0. That builds a record of where people disagreed with the pipeline.
 - **It complements the audit trail rather than replacing it.** The audit CSV is the record for the customer and for compliance; LangSmith is for debugging and improving the pipeline.
