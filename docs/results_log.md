@@ -173,3 +173,22 @@ One gap it exposed: two *auto-approved* answers carried reviewer notes that no h
 - *Tested offline only:* refusing a stale library answer when its policy section changes version.
 
 **Phase 3 is complete.** Next is Phase 4: a Streamlit review screen, held-out evals, the `src/` package, and filling in Yes/No dropdown columns.
+
+## Held-out set, second run: one unsafe auto-approval, and a code rule
+
+The held-out set was run a second time, with LangSmith tracing switched on ([`eval_heldout_run2.csv`](../results/eval_heldout_run2.csv)):
+
+| | Run 1 | Run 2 | Run 2, re-scored with the new rule |
+|---|---|---|---|
+| **Unsafe auto-approvals** | 0 | **1** | **0** |
+| Answerable auto-approved | 13 / 14 | 12 / 14 | 12 / 14 |
+| Precision of High | 100% | 92% | 100% |
+| Correct outcome | 24 / 26 | 22 / 26 | 23 / 26 |
+
+- **The miss: H16, *"Do you penetration test your AI features specifically?"*** The answer was *"Before release, every Acme AI feature undergoes internal adversarial testing for prompt injection and data leakage…"*.
+  - Every claim was quoted verbatim from AIG-10, so every check passed. But the answer swaps in a different kind of testing instead of answering the question. The policy never says whether the annual external pen test (ISP-7) covers AI features, so a person should decide.
+- **Why run 1 caught it:** it drafted almost the same answer, but Claude also wrote a reviewer note asking for a check, which Jev scored 0.88. In run 2 Claude wrote no note. The pipeline's safety on this question had depended on the model choosing to write a warning.
+- **The fix is a code rule, not a prompt change.** The drafting prompt already allows "Yes."/"No." only when a passage states it directly. So a yes/no question answered without Yes or No rests on inference, and it now goes to a person (`answers_directly` in [`agents.py`](../src/responder/agents.py)). Either/or questions are exempt.
+- **It was checked on saved runs before being added.** It holds back H16 and nothing else: no answer that was correctly auto-approved in run 4, run 6, or held-out run 1. All 6 yes/no answers auto-approved in run 6 already began with Yes or No.
+- **Caveat:** the rule was written after seeing this held-out set, so these 26 questions can no longer show that it generalises. That needs fresh questions written before a run.
+- 1 of the 2 wrongly held answerable questions was again H07 (target availability), where Jev's contract-terms probability was 0.48, just over the 0.4 "unsure" line.

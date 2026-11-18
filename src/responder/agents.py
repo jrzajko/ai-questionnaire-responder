@@ -139,6 +139,23 @@ def keyword_flags(question: str) -> list[str]:
     return [f"keyword rule: {name}" for name, rx in RESTRICTED_RULES.items() if re.search(rx, question, re.I)]
 
 
+YES_NO_QUESTION = re.compile(r"^(do|does|did|are|is|was|were|can|could|will|would|have|has|should|must|may)\b", re.I)
+
+
+def answers_directly(question: str, answer: str) -> bool:
+    """A yes/no question must get an answer that starts "Yes" or "No".
+
+    The drafting prompt only allows "Yes."/"No." when a passage states it directly, so a yes/no question
+    answered any other way rests on inference (e.g. "Do you pen test your AI features?" answered with
+    "every AI feature undergoes internal adversarial testing..."): true, but not what was asked.
+    Either/or questions ("single-tenant or multi-tenant?") are exempt.
+    """
+    q = re.sub(r"^[\W\d_]*(?:\(?[a-z]\)\s*)?", "", question.strip(), flags=re.I)   # drop "3.4(b)", "(a)" prefixes
+    if not YES_NO_QUESTION.match(q) or re.search(r"\bor\b", q, re.I):
+        return True
+    return bool(re.match(r"^\W*(yes|no)\b", answer.strip(), re.I))
+
+
 def norm(s: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^\w\s%.]", " ", s.lower())).strip()
 

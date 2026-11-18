@@ -8,7 +8,7 @@ from langgraph.types import Command
 
 from conftest import ROOT
 from responder import ESCALATE_TEXT
-from responder.agents import keyword_flags, numbers_match
+from responder.agents import answers_directly, keyword_flags, numbers_match
 from responder.graph import decision, review_queue
 from responder.io import audit_rows, extract_questions, write_completed
 from responder.library import AnswerLibrary
@@ -234,3 +234,28 @@ def test_tracing_off_adds_nothing(make_responder, tmp_path, monkeypatch):
     values, _ = run_and_review(make_responder(), items, tmp_path, "run-off", lambda p: decision("reject", "Tester"))
     assert "trace_run_id" not in values["final"][0]
     assert tracing.log_decision(values["final"][0], decision("reject", "Tester")) is False
+
+
+def test_yes_no_questions_need_a_direct_answer():
+    pen = "Do you penetration test your AI features specifically?"
+    sidestep = "Before release, every Acme AI feature undergoes internal adversarial testing for prompt injection."
+    assert not answers_directly(pen, sidestep)                                   # held-out H16, run 2
+    assert answers_directly(pen, "No. The policy pack doesn't state that.")
+    assert answers_directly("3.4(b) Are backups encrypted?", "Yes. Backups are encrypted.")
+    assert not answers_directly("(a) Are backups encrypted?", "Backups are stored in Ireland.")
+    assert answers_directly("Is the platform single-tenant or multi-tenant?", "Acme Workspace is multi-tenant.")
+    assert answers_directly("How often are backups taken?", "Daily.")
+
+
+def test_sidestepped_yes_no_answer_goes_to_review(make_responder):
+    resp = make_responder()
+    state = {"question": "Do you penetration test your AI features specifically?", "caps": [], "restricted": False,
+             "restricted_reasons": [], "jev": {}, "classification": {"category": "ai_governance"},
+             "draft": {"covered": True, "answer": "Every AI feature undergoes internal adversarial testing.",
+                       "cited_section_ids": ["AIG-10"], "reviewer_note": ""},
+             "grounding": {"claims": [{"verdict": "explicit", "contradicted": False}]}}
+    r = resp.score(state)["result"]
+    assert r["status"] == "human_review" and r["confidence"] == "Medium"
+    assert "yes/no question not answered with Yes or No" in r["reasons"] and r["signals"]["direct_answer"] is False
+    state["draft"]["answer"] = "Yes. Every AI feature undergoes internal adversarial testing."
+    assert resp.score(state)["result"]["status"] == "auto_approve"

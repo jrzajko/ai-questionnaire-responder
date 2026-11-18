@@ -15,7 +15,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send, interrupt
 
 from .agents import (CHOICE_CRITERIA, COMMIT_KEYS, COMMON_RULES, DRAFT_PROMPT, EXTRACT_PROMPT, SPECIALIST_FOCUS,
-                     ClaudeClient, JevClient, Usage, jev_questions, keyword_flags, norm, numbers_match)
+                     ClaudeClient, JevClient, Usage, answers_directly, jev_questions, keyword_flags, norm, numbers_match)
 from .config import ESCALATE_TEXT, Settings
 from .library import AnswerLibrary
 from .retrieval import PolicyIndex, format_hits
@@ -168,9 +168,13 @@ class Responder:
         n = len(claims)
         support = sum(c["verdict"] != "unsupported" for c in claims) / n if n else 0.0
         explicit = sum(c["verdict"] == "explicit" for c in claims) / n if n else 0.0
-        caps = state.get("caps", [])
+        caps = list(state.get("caps", []))
+        direct = answers_directly(state["question"], d["answer"])
+        if d["covered"] and not direct:                  # code rule: never auto-approve a sidestepped yes/no
+            caps.append("yes/no question not answered with Yes or No")
         signals = {"library_match": False, "claims": n, "claim_support": round(support, 2),
-                   "explicit_evidence": round(explicit, 2), "restricted": state["restricted"], **state.get("jev", {})}
+                   "explicit_evidence": round(explicit, 2), "direct_answer": direct,
+                   "restricted": state["restricted"], **state.get("jev", {})}
         reasons, answer = [], d["answer"]
         if not d["covered"] or n == 0 or support == 0:
             level, answer = "Low", ESCALATE_TEXT

@@ -29,18 +29,24 @@ The same 60-question Globex questionnaire was run through every pipeline and sco
 | C: Jev hybrid, tuned | **36 / 41** | **0** | 6 / 6 | 5 / 5 | $0.17 |
 | **C + human review + answer library** (final) | 33 / 41 | **0** | 6 / 6 | 5 / 5 | **$0.20** |
 
-- An answer is **unsafe** if it was auto-approved although the answer key says a person must see it: a trap, a commitment, a partial answer. That number has been **0 in every run**.
+- An answer is **unsafe** if it was auto-approved although the answer key says a person must see it: a trap, a commitment, a partial answer. That number was **0 in every run on these 60 questions**. One run on the held-out set below had 1, which led to a new code rule.
 - The final pipeline auto-approves 6 more answers than the Opus baseline, at **about 9% of the cost**.
 - It sits 3 below the tuned run, mostly for a deliberate reason: it now holds back answers whose reviewer note asks for a check, e.g. *"confirm the certificate is still valid before sending."*
 - Costs are measured from the APIs' own token counts, except the baseline's, which was estimated before cost tracking existed.
 
 **Held-out check: do the tuned thresholds generalise?** They were tuned on those 60 questions, so 26 fresh questions ([`heldout_set.csv`](data/evals/heldout_set.csv)) were written and **committed before any run**. One run of [`evals/run_evals.py`](evals/run_evals.py) gave ([`results/eval_heldout.csv`](results/eval_heldout.csv)):
 
-| Unsafe auto-approvals | Answerable auto-approved | Precision of High | Traps escalated | Restricted held | Faithful (LLM judge) | Correct outcome | Cost |
-|---|---|---|---|---|---|---|---|
-| **0** | **13 / 14** | **100%** | 4 / 4 | 3 / 3 | **100%** | 24 / 26 | $0.14 |
+| Run | Unsafe auto-approvals | Answerable auto-approved | Precision of High | Traps escalated | Restricted held | Faithful (LLM judge) | Correct outcome | Cost |
+|---|---|---|---|---|---|---|---|---|
+| 1 | **0** | **13 / 14** | **100%** | 4 / 4 | 3 / 3 | **100%** | 24 / 26 | $0.14 |
+| 2 | **1** | 12 / 14 | 92% | 4 / 4 | 3 / 3 | **100%** | 22 / 26 | $0.14 |
+| 2, re-scored with the new rule | **0** | 12 / 14 | **100%** | 4 / 4 | 3 / 3 | **100%** | 23 / 26 | no new calls |
 
 - **Faithfulness** was judged by Claude Opus, a different model from the Sonnet drafter.
+- **The unsafe answer in run 2 was faithful but evasive.** *"Do you penetration test your AI features specifically?"* got *"…every Acme AI feature undergoes internal adversarial testing…"*: every word was quoted from policy, but it doesn't answer the question.
+  - In run 1, Claude had added a reviewer note asking for a check, and that held the answer back. In run 2 it didn't. Safety shouldn't depend on the model volunteering a warning.
+  - **The fix is a code rule:** a yes/no question must be answered with "Yes" or "No", which the drafting prompt allows only when a policy states it directly. Otherwise the answer goes to a person.
+  - Re-scored on saved runs, the rule catches this one and holds back no correct auto-approval. It was written after seeing these questions, though, so proving it generalises needs fresh ones.
 - **The two misses were both cautious:**
   - *"What is your target monthly availability?"* was held for review because Jev scored it 0.42 for asking contract terms, just over the 0.4 "unsure" line.
   - An implied-only SSO question was escalated rather than drafted.
@@ -87,7 +93,8 @@ flowchart TD
 - Jev says the section supports it, with confidence ≥ 0.8;
 - the question isn't a commitment;
 - the sections answer every part of the question;
-- the reviewer note doesn't ask for a check.
+- the reviewer note doesn't ask for a check;
+- a yes/no question is answered with "Yes" or "No", not sidestepped.
 
 Anything else goes to a person, most important first. Every probability is logged, so thresholds can be re-tuned against the answer key **without new API calls**.
 
@@ -177,7 +184,7 @@ notebooks/            Colab notebooks (self-contained, kept as the record of eac
 ## Limitations
 
 - **One policy pack, one questionnaire family.** The held-out set tests generalisation within Acme's policies, not to another company's documents.
-- **Thresholds were tuned on 60 questions** and checked on 26 fresh ones. Real calibration needs far more volume.
+- **Thresholds were tuned on 60 questions** and checked on 26 fresh ones. The direct-answer rule was added after the second held-out run, so the held-out set is no longer unseen. Real calibration needs far more volume.
 - **Implied-only questions are escalated rather than drafted.** It's safe, but the reviewer starts from a blank answer.
 - **Two-part questions** can fall just under the relevance line when each section answers only half.
 - **The stale-policy check is tested offline only.** It needs a real policy change to see live.

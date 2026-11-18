@@ -9,7 +9,7 @@ import re
 import pytest
 from typesafe_sdk import ChoiceAnswer, NoulAnswer, SystemOneResponse, Usage as TSUsage
 
-from responder.agents import JevClient, Usage
+from responder.agents import JevClient, Usage, answers_directly
 from responder.config import Settings
 from responder.graph import Responder
 from responder.retrieval import PolicyIndex
@@ -86,7 +86,9 @@ class FakeClaude:
             if not sections:
                 return DraftAnswer(covered=False, answer="", cited_section_ids=[], reviewer_note="")
             sid, text = sections[0]
-            return DraftAnswer(covered=True, answer=first_sentence(text), cited_section_ids=[sid],
+            q = re.search(r"Question: (.*)", messages[-1].content).group(1)
+            yes = "Yes. " if not answers_directly(q, "") else ""                # follows the prompt's Yes./No. rule
+            return DraftAnswer(covered=True, answer=yes + first_sentence(text), cited_section_ids=[sid],
                                reviewer_note=self.note(sid) if callable(self.note) else self.note)
         if schema is ClaimList:
             sid, text = sections[0]
